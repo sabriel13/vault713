@@ -1,0 +1,171 @@
+---
+title: "Day 4 Homework Alia Lancaster"
+output: html_document
+---
+Packages
+```{r}
+library(reshape2)
+library(plyr)
+
+```
+
+
+1. Change the column names of your data to something easier to work with.  If you like your column names, change them into something else reasonable, just for practice.
+- change the names of the columns that have capital letters
+- make a dataframe with the old and new names
+
+```{r}
+# read in the data
+ax <- read.csv("ax_AL.csv")
+
+# change column names
+oldnames <- colnames(ax)
+ax <-rename(ax, c("Item" = "item", "SubjectID" = "subjectid", "RT" = "rt", "ACC" = "acc"))
+colnames(ax)
+newnames <- colnames(ax)
+ax.colnames <- data.frame(oldnames, newnames)
+ax.colnames
+```
+
+
+2. List ALL the issues you can see where it looks like your data is being read in a weird way.  If your data looks perfect, find some way to mess it up :-)
+- Issue #1 - the weird X column (probably since I wrote if from a previous R data.frame)
+- Issue #2 - some columns that are factors are being read in as numeric.  My fault since they all have numbers in them.  I'll tell R they are factors and add a string character to the variable (some of this from my third homework)
+  - Issue #2a - after pasting the string in or creating a new column, the variables are character vectors.  I changed them to factors
+
+```{r}
+summary(ax)
+```
+
+
+3. Pick one or two of the most egregious or problematic of the issues in #2 and fix them.
+
+```{r}
+summary(ax)
+# get rid of first column
+ax <- ax[, -1]
+colnames(ax)
+
+# make some factors read in as numeric into factors.  Make a new column for 'correct_response' that is easier for me to process (same or different)
+ax$item <- paste(ax$item, "item", sep="")
+ax$subjectid <- paste(ax$subjectid, "id", sep = "")
+
+ax$correct_response <- as.factor(ax$correct_response)
+ax$samediff <- "same"
+ax$samediff[ax$correct_response=="0"] <- "diff"
+summary(ax$item)
+summary(ax$subjectid)
+summary(ax$samediff)
+
+ax$item <- as.factor(ax$item)
+ax$subjectid <- as.factor(ax$subjectid)
+ax$samediff <- as.factor(ax$samediff)
+summary(ax$item)
+summary(ax$subjectid)
+summary(ax$samediff)
+
+```
+
+
+4. Check for NAs, and report where you see them (try to pinpoint where they are, not just "5 NAs in column seven".
+- There are no NAs.  I had some when the lists were 2 seperate datasets (I've attached these in the email).  These seem to be a function of the read.azk function.  I looked at the original AZK data file and
+
+```{r}
+summary(ax$acc)
+
+```
+
+5. Decide what you think you should do about the NAs, and say why.  If you can, try to implement this decision.
+ - since the NAs do not indicate a lack of response, I will not keep them when I merge the lists.
+ 
+ 
+```{r}
+
+```
+
+6. Remove any problematic rows and/or columns.  Say why you want to remove them.  If there aren't any problems, describe why you think there are no problems.
+- I removed the weird 'X' column earlier.
+- Is there anything in the merged one to remove?
+
+```{r}
+summary(ax$phoneme_pair_ordered)
+
+```
+
+
+7. Re-code at least one factor.  Provide a table that shows the correspondence between old levels and new levels.
+
+```{r}
+
+```
+
+
+8. Run TWO DIFFERENT simple analyses or statistical tests, such as linear regression (`lm()`), logistic regression (`glm()`), correlation test (`cor.test()`), t-test (`t.test()`), or non-parametric tests (e.g., `wilcox.test()`).  For each of these:
+  - Describe why you are doing this analysis, i.e., what question is it answering?
+  - I won't judge you on statistical expertise!  (though I will make comments if I think I can be helpful)
+  - Report some key statistics from the analysis, using inline code
+  
+- Use data with dprime?
+
+Analysis #1: ANCOVA with d-prime as DV
+Question:
+```{r}
+# ANOVA on the effect of speaker, voicing (pu) and their interactions on reaction time/dprime
+aov.dp <- aov(data=ax, dprime ~ spkr * pu)
+sum.aov.dp <- summary(aov.dp)
+sum.aov.dp
+names(sum.aov.dp) # returns null. Weird.
+str(sum.aov.dp)
+
+resid.df <- sum.aov.dp$Df
+resid.df # returns NULL.  Seems like there is another layer above that.
+# sum.aov.dp <- data.frame(summary(aov.dp)) # tried coercing it into a data.fram.  No luck.
+
+# tried running an lm instead, so see if the class was different
+lm.dp <- lm(data=ax, dprime ~ spkr * pu)
+sum.lm.dp <- summary(lm.dp)
+sum.lm.dp #not quite what I want
+aov.lm.dp <- anova(lm.dp)
+aov.lm.dp # yes, this is what I want and it has the same numbers as using aov()
+str(aov.lm.dp) # hm, this structure seems to have less layers than the summary from aov()
+resid.df <- aov.lm.dp$Df[4]
+# resid.df <- aov.lm.dp$Df["Residuals"] $ returns NA
+resid.df # it works!
+names(aov.lm.dp)
+
+# set values for repodp
+#f.spkr <- aov.lm.dp$F value[1] # get an error, R doesn't seem to like the space 
+f.spkr <- aov.lm.dp$F.value[1]
+f.spkr # retuns NULL
+
+# another solution I found later to get the same value from the summary of the aov() function. Found on stackoverflow (http://stackoverflow.com/questions/3366506/extract-p-value-from-aov)
+resid.df2 <- sum.aov.dp[[1]]$Df[4]
+resid.df2
+names(sum.aov.dp[[1]])
+
+f.spkr <- sum.aov.dp[[1]]$F.value[1]
+f.spkr # retuns Null
+f.spkr <- sum.aov.dp[[1]][1,"F value"]
+f.spkr # this works. Something about using the dollar sign?
+f.pu <- sum.aov.dp[[1]][2,"F value"]
+f.pu
+f.spkrpu <- sum.aov.dp[[1]][3,"F value"]
+f.spkrpu
+
+#p.spkr <- sum.aov.dp[[1]]$Pr(>F)[1] # Get an error( "unexpected '>' ). Column name is copied from the names(sum.aov.dp[[1]]) output, so I don't think I'm missing a space.  Not sure what is going on here, so I'll use numbers to refer to the correct column
+p.spkr <- sum.aov.dp[[1]][1,"Pr(>F)"]
+p.spkr
+p.pu <- sum.aov.dp[[1]][2,"Pr(>F)"]
+p.pu
+p.spkrpu <- sum.aov.dp[[1]][3,"Pr(>F)"]
+p.spkrpu
+
+tukey.aov.dp <- TukeyHSD(aov.dp)
+tukey.aov.dp
+```
+
+Report for d-prime anova:
+
+A two-was ANOVA was conducted on the effect of speaker group (native, L2) and manner of articiulation (pharyngeal, uvular, control) and their interactions on sensativity scores. There were main effects of speaker (F(1, `r resid.df`) = `r f.spkr`, p= `r p.spkr`) and manner of articulation (F(2, `r resid.df`) = `r f.pu`, p = `r p.pu`). There was also a significant interaction between speaker and manner of articulation (F(2, `r resid.df`) = `r f.spkrpu`, p = `r p.spkrpu`). 
+
+  

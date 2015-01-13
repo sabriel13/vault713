@@ -1,0 +1,155 @@
+---
+title: "Day 5 Homework Alia Lancaster"
+output: html_document
+---
+Packages
+```{r}
+library(ggplot2)
+
+```
+
+0. Start out by getting your data into "long" format.  This will help with some of the following.
+```{r}
+ax <- read.csv("ax_dprime_cloze_AL.csv")
+# reorder context for later
+ax$context <- factor(ax$context, levels = c("Initial", "Medial", "Final"))
+# remove NAs so don't have to get the warning message
+ax <- ax[!is.na(ax$dprime),]
+```
+
+
+1. Pick a single numerical variable from your data.  Use `ggplot` to plot a histogram and a density plot (separately).
+   - Try some different values for `binwidth` for the histogram.
+   - Try some different values for `adjust` for the density plot.
+
+Numerical Value: dprime
+```{r}
+# start putting plots in pdf
+pdf("myplots.pdf")
+# histograms
+ggplot(ax, aes(x=dprime)) + geom_histogram()
+ggplot(ax, aes(x=dprime)) + geom_histogram(binwidth = .1)
+ggplot(ax, aes(x=dprime)) + geom_histogram(binwidth=1.0)
+ggplot(ax, aes(x=dprime)) + geom_histogram(binwidth=.5)
+
+#density plots
+ggplot(ax, aes(x=dprime)) + geom_density()
+ggplot(ax, aes(x=dprime)) + geom_density(adjust = 2)
+ggplot(ax, aes(x=dprime)) + geom_density(adjust = 5)
+ggplot(ax, aes(x=dprime)) + geom_density(adjust = .5)
+
+```
+
+
+2. How does the distribution look?  Try transforming the variable and try to get it to look more normal (i.e., more Gaussian).  If it already looks normal, do something to it to make it look non-normal.
+
+The distirbution does not look very normal. I tried transforming with log and square root, both of which made the data skewed to the right.    
+
+```{r}
+ggplot(ax, aes(x=log(dprime))) + geom_histogram(binwidth=.1)
+ggplot(ax, aes(x=sqrt(dprime))) + geom_histogram(binwidth=.1)
+
+
+```
+
+
+3. Is there a factor that you can use to break up this variable into groups of observations?  If not, reshape your data so that there is, or create a factor if necessary.  Then, do the following:
+   - Plot it as a density plot, mapping `color` to the factor
+   - Same, but try using `fill` instead of `color`
+   - Same, using `linetype` instead of `color`
+   - Plot the data as a boxplot, with the factor as `x` and the numerical variable as `y`
+
+Factor = speaker (native, L2)
+```{r}
+ggplot(ax, aes(x=dprime, color = speaker)) + geom_density(adjust = .5)
+ggplot(ax, aes(x=dprime, fill = speaker)) + geom_density(adjust = .5)
+ggplot(ax, aes(x=dprime, linetype = speaker)) + geom_density(adjust = .5)
+ggplot(ax, aes(x=speaker, y = dprime)) + geom_boxplot()
+
+
+```
+
+
+4. Now let's look at breaking up a histogram across a factor.  With the same variables you used in #3:
+   - Plot a histogram, but use faceting to display them, one above the other.
+   - Try mapping the factor to `color` or `fill`, to see what that looks like.
+   - Which one seems most useful or informative for your data, and why?
+   
+It would be most useful if I could see the distribution broken up by context and speaker.  I need to unstack the bins, I think. 
+
+```{r}
+ggplot(ax, aes(x=dprime)) + geom_histogram(binwidth = .1) + facet_grid (speaker~.)
+ggplot(ax, aes(x=dprime, color=speaker)) + geom_histogram(binwidth = .1) + facet_grid (speaker~.)
+# this is the most useful to my data
+ggplot(ax, aes(x=dprime, color=speaker)) + geom_histogram(binwidth = .1) + facet_grid (context~.)
+```
+
+
+5. Now find two numerical variables.  You may need to reshape your data.  For example, if you have one numerical variable and a "condition" factor, you could use `dcast` to spread that variable across multiple columns (one per level of the factor).  Once you have two numerical variables:
+   - Create a scatterplot, with one variable mapped to `x` and the other to `y`.
+   - Plot a "loess" smoother on top of the scatterplot
+   - Plot a regression line on top of the scatterplot (instead of the loess)
+   
+two numerical varibles: dprime and meanRT
+```{r}
+
+ggplot(ax, aes(x=dprime, y=meanRT)) + geom_point()
+
+ggplot(ax, aes(x=dprime, y=meanRT)) + geom_point() + geom_smooth()
+
+ggplot(ax, aes(x=dprime, y=meanRT)) + geom_point() + geom_smooth(method="lm")
+
+```
+
+6. Are there any other factors that split up the variable plotted in #5?  If so try the following:
+   - Map the factor to `color`
+   - Facet by the factor
+   
+   
+```{r}
+ggplot(ax, aes(x=dprime, y=meanRT, color=context)) + geom_point()
+
+ggplot(ax, aes(x=dprime, y=meanRT, color=context)) + geom_point() + geom_smooth(method="lm")
+
+ggplot(ax, aes(x=dprime, y=meanRT)) + geom_point() + geom_smooth(method="lm") + facet_wrap(~context)
+
+ggplot(ax, aes(x=dprime, y=meanRT, color=context)) + geom_point() + geom_smooth(method="lm") + facet_wrap(~speaker)
+```
+
+7. Output all of the plots above as a single PDF.
+
+```{r}
+dev.off()
+```
+
+
+8. Is there a better type of visualization for your data?  What numbers would you like to be able to visualize better?  Be as explicit as possible, and write some "pseudo-code" to ilustrate what you think you would like.
+
+I would like to create some boxplots to explore what is going on in the final context. 
+
+```{r}
+
+ggplot(ax, aes(x=speaker, y=dprime, fill=speaker)) + 
+  geom_boxplot() + 
+  facet_grid(context~.) +
+  guides(fill=FALSE)
+
+ggplot(ax, aes(x=speaker, y=dprime, fill=speaker)) + 
+  geom_boxplot() + 
+  facet_wrap(~context) +
+  guides(fill=FALSE)
+
+ggplot(ax, aes(x=speaker, y=dprime, fill=pu)) + 
+  geom_boxplot()
+
+ggplot(ax, aes(x=speaker, y=dprime, fill=pu)) + 
+  geom_boxplot()+ 
+  facet_wrap(~context)
+
+
+```
+
+
+9. Save your Markdown document that answers all of these questions (with code) as well as your PDF, and commit them as changes to your git homework repository.  Push those changes to GitHub by Monday morning at 9am.
+
+

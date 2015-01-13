@@ -1,0 +1,162 @@
+---
+title: "Day 6 Homework"
+output: html_document
+---
+
+1. Think carefully about your data.  Think about something you would like to do multiple times, to subsets of your data.  
+
+I would like the mean accuracy and reaction time for each context (mean accuracy for initial, medial, and final contexts)
+
+2. Write out (in plain English, in the notebook) what you are trying to do.
+
+First, I would subset the data according to the level of the 'context' factor. Then, I would calculate the mean of the 'meanRT' vector and the 'meanACC' vector.  After doing this three times, I would combine the three factors to have a dataframe with the mean reaction time and accuracy for each context. 
+
+3. Write some "pseudo-code" comments in an R chunk, as an outline
+```{r echo=FALSE}
+for(this.counter 1:3){
+  the groups are the levels of the 'context' factor
+  rt.vector <- subset the data where the row is the context level and the column is rt
+  acc.vector <- subset the data where the row is the context level and the column is accuracy
+  mean.df [1, this.counter] <- mean of the rt.vector
+  mean.df [2, this.counter] <- mean of the acc.vector
+}
+
+```
+
+
+4. Write some (real) code that will do what you want ONCE, on one subset of the data.
+
+```{r}
+ax <- read.csv("ax_dprime_cloze_AL.csv")
+summary(ax$context)
+ax.final.acc <- ax[ax$context=="Final", "meanACC"]
+ax.final.rt <- ax[ax$context=="Final", "meanRT"]
+mean.df <- data.frame(final=vector(length=2), initial = vector(length=2), medial=vector(length=2))
+mean.df[1,1] <- mean(ax.final.acc)
+mean.df[2,1] <- mean(ax.final.rt)
+mean.df
+
+```
+
+
+5. Copy that code chunk, and convert it into a loop, which will do what you want over all the groups, concatenating the results.
+
+```{r}
+mean.df.all <- data.frame(final=vector(length=2), initial = vector(length=2), medial=vector(length=2))
+
+for(this.counter in 1:3){
+ this.group <- c("Final", "Initial", "Medial")[this.counter]
+ acc.vector <- ax[ax$context == this.group, "meanACC"]
+ rt.vector<- ax[ax$context == this.group, "meanRT"]
+ mean.df.all[1, this.counter] <- mean(acc.vector)
+ mean.df.all[2, this.counter] <- mean(rt.vector)
+}  
+mean.df.all
+this.counter
+
+```
+
+
+6. Copy that loop again, and at a condition (`if`) statement to add some further control about ignoring some groups or some other conditional operation.
+
+Only go through the if loop for reaction times greater than 750ms
+
+```{r}
+
+if(x > 5) {
+  x <- x^2
+}
+
+ax <- read.csv("ax_dprime_cloze_AL.csv")
+# Attempt 1 - the if statement isn't applying
+rm(mean.df.reduced)
+mean.df.reduced <- data.frame(final=vector(length=2), initial = vector(length=2), medial=vector(length=2))
+if(ax$meanRT < 750){
+  for(this.counter in 1:3){
+    this.group <- c("Final", "Initial", "Medial")[this.counter]
+    acc.vector <- ax[ax$context == this.group, "meanACC"]
+    rt.vector<- ax[ax$context == this.group, "meanRT"]
+    mean.df.reduced[1, this.counter] <- mean(acc.vector, na.rm=TRUE)
+    mean.df.reduced[2, this.counter] <- mean(rt.vector, na.rm=TRUE)
+}}  
+mean.df.reduced
+mean.df.all
+this.counter
+
+# Attempt 2 - now all vectors are the last iteration of the function (i.e., the final and initial are the same as the medial means)
+rm(mean.df.reduced)
+mean.df.reduced <- data.frame(final=vector(length=2), initial = vector(length=2), medial=vector(length=2))
+
+for(this.counter in 1:3){
+  if(ax$meanRT[this.counter] > 750){
+    this.group <- c("Final", "Initial", "Medial")[this.counter]
+    acc.vector2 <- ax[ax$context == this.group, "meanACC"]
+    rt.vector2<- ax[ax$context == this.group, "meanRT"]
+    mean.df.reduced[1, this.counter] <- mean(acc.vector)
+    mean.df.reduced[2, this.counter] <- mean(rt.vector)
+}}  
+mean.df.reduced
+mean.df.all
+this.counter
+this.group
+
+# Attempt 3 
+rm(mean.df.reduced)
+mean.df.reduced <- data.frame(final=vector(length=2), initial = vector(length=2), medial=vector(length=2))
+
+for(this.counter in 1:3){
+    this.group <- c("Final", "Initial", "Medial")[this.counter]
+      if(ax$meanRT[this.counter] > 750){
+    acc.vector2 <- ax[ax$context == this.group, "meanACC"]
+    rt.vector2<- ax[ax$context == this.group, "meanRT"]
+    mean.df.reduced[1, this.counter] <- mean(acc.vector)
+    mean.df.reduced[2, this.counter] <- mean(rt.vector)
+}}  
+mean.df.reduced
+mean.df.all
+this.counter
+this.group
+
+# Attempt 4 - if statement didn't apply
+rm(mean.df.reduced)
+ax <- read.csv("ax_dprime_cloze_AL.csv")
+
+if(any(ax$meanRT) < 750){
+  ax$meanRT <- NA
+  } else {
+  ax$meanRT <- ax$meanRT
+}
+
+summary(ax$meanRT)
+summary(ax)
+for(this.counter in 1:3){
+    this.group <- c("Final", "Initial", "Medial")[this.counter]
+    acc.vector2 <- ax[ax$context == this.group, "meanACC"]
+    rt.vector2<- ax[ax$context == this.group, "meanRT"]
+    mean.df.reduced[1, this.counter] <- mean(acc.vector, na.rm=TRUE)
+    mean.df.reduced[2, this.counter] <- mean(rt.vector, na.rm=TRUE)
+}  
+
+# Attempt 5 - this works but only uses an if statement
+rm(mean.df.reduced)
+ax <- read.csv("ax_dprime_cloze_AL.csv")
+
+ax$meanRT <- ifelse(ax$meanRT< 750, NA, ax$meanRT)
+
+mean.df.reduced <- data.frame(final=vector(length=2), initial = vector(length=2), medial=vector(length=2))
+
+
+summary(ax$meanRT)
+for(this.counter in 1:3){
+ this.group <- c("Final", "Initial", "Medial")[this.counter]
+ acc.vector <- ax[ax$context == this.group, "meanACC"]
+ rt.vector<- ax[ax$context == this.group, "meanRT"]
+ mean.df.reduced[1, this.counter] <- mean(acc.vector, na.rm=TRUE)
+ mean.df.reduced[2, this.counter] <- mean(rt.vector, na.rm=TRUE)
+} 
+
+mean.df.reduced
+mean.df.all
+this.counter
+```
+

@@ -1,0 +1,139 @@
+---
+title: "Day 3 Homework Alia Lancaster"
+output: html_document
+---
+Packages
+```{r}
+library(reshape2)
+```
+
+
+The goal of this homework is to get practice with manipulating data.
+
+1. Make both a "wide" and a "long" version of your data
+-The current data set is in a long format (i.e., the measurement variables, ACC and RT, are each in one column with many groupings being listed in other columns)
+-First I will cast it into a wide format by phoneme_pair filling in Accuracy (this will help with d-prime calcuations I think)
+-Second I will melt the wide version back into a long one
+- I am not sure I accomplished this task, but I listed some issues that I could not solve.
+
+```{r}
+# read in data
+ax <-read.csv("ax_AL.csv")
+summary(ax)
+# deal with factors
+ax$Item <- paste(ax$Item, "Item", sep="")
+ax$Item <- as.factor(ax$Item)
+ax$SubjectID <- paste(ax$SubjectID, "ID", sep = "")
+ax$SubjectID <- as.factor(ax$SubjectID)
+ax$correct_response <- as.factor(ax$correct_response)
+summary(ax)
+
+#cast into wide format
+ax.cast <- dcast(ax, X + Item + SubjectID + RT + spkr + correct_response + confusable + word1 + word2 + gender_order + context + phoneme_pair_ordered + pu + vvl + list ~ phoneme_pair, value.var = "ACC")
+summary(ax.cast)
+head(ax.cast)
+length(ax$RT)
+length(ax.cast$RT)
+summary(ax$SubjectID)
+summary(ax.cast$SubjectID)
+```
+
+Issue #1
+Am am not sure why, but dcast() gave the error we discussed in class ("Aggregation function missing: defaulting to length") if I did not include the variable "X".  If I deleted the "x" variable and then run dcast, that error occurs. The code above does what I want, which is to list the accuracy of each phoneme pair. Does the error have something to do with the fact that every subject heard every item twice?
+
+```{r}
+ax.short <- ax[,-1]
+ax.cast2 <- dcast(ax.short, Item + SubjectID + RT + spkr + correct_response + confusable + word1 + word2 + gender_order + context + phoneme_pair_ordered + pu + vvl + list ~ phoneme_pair, value.var = "ACC")
+
+```
+
+Melt into a long format
+```{r}
+ax.melt <- melt(ax.cast, id.vars = c("X", "Item", "SubjectID", "RT", "spkr", "correct_response", "confusable", "word1", "word2", "gender_order", "context", "phoneme_pair_ordered", "pu", "vvl", "list"), value.name = "Accuracy", variable.name = "phoneme.type2")
+summary(ax.melt)
+```
+
+Issue #2: The NAs in the wide format cause melting to create a lot of NA in the Acuracy variable
+```{r}
+summary(ax.melt$Accuracy)
+
+```
+
+
+
+2. Transform a variable
+- I created a new variable that changed the unit of measurement from ms to second in RT by multiplying by 100
+
+```{r}
+ax$RTsec <- ax$RT*100
+summary(ax)
+
+```
+
+
+3. Recode a factor
+- Changed the names of the levels in the context variable and reordered them to initial, medial, and final (so the graphs would make more sense)
+
+```{r}
+summary(ax$context)
+# current order: F, I, M
+levels(ax$context) <- c("final", "initial", "medial")
+summary(ax$context)
+
+ax$context <- factor(ax$context, levels = c("initial", "medial", "final"))
+summary(ax$context)
+```
+
+
+4. Add a new factor, where the levels are conditional on the values of some other variable. E.g., a factor of "high", "medium", and "low" based on thresholds for another variable.
+- Made a new column called samediff, which is exactly the same as correct_response but uses strings instead of numbers.
+- Made a new numeric variable called hits, which equals 1 if the pair was different (samediff == diff) and the participant correcly responded that the pair was different.
+
+```{r}
+ax$samediff <- "same"
+ax$samediff[ax$correct_response=="0"] <- "diff"
+ax$samediff <- as.factor(ax$samediff)
+summary(ax)
+xtabs(~ samediff + phoneme_pair, data=ax)
+
+ax$hits <- ifelse(ax$samediff=="diff" & ax$ACC==1, 1, 0) 
+summary(ax)
+xtabs(~samediff + hits, data=ax)
+```
+
+
+5. Reorder the levels of this new factor
+- Changed the order of ax$samediff from diff, same to same,diff
+```{r}
+summary(ax$samediff)
+ax$samediff <- factor(ax$samediff, levels = c("same", "diff"))
+summary(ax$samediff)
+```
+
+
+6. Choose a factor that could be re-coded as multiple dimensions (recall the sepal/petal vs. length/width breakdown). If you don't have one, try to create one.  Now create two (or more) new factors that represent these dimensions.
+- Created a new column called phoneme_pairnum with the phoneme pair and a unique number seperated by an underscore, then I created 2 new columns from phoneme_pairnum.
+- 
+```{r}
+ax$phoneme_pairnum <- factor(paste (ax$phoneme_pair, rnorm(1:nrow(ax)), sep="_"))
+summary(ax)
+
+ax2 <- cbind(ax, colsplit(ax$phoneme_pairnum, pattern = "\\_", names = c("phoneme_pair2", "number")))
+ax2$phoneme_pair2 <- as.factor(ax2$phoneme_pair2)
+summary(ax2)
+```
+
+
+7. Using `dcast`, aggregate some variable into "cell means" of some kind.
+-Average accuracy of each context by speaker group and the standard deviation of accuracy of each context by speaker group
+
+```{r}
+ax.agg.mean <- dcast(ax, spkr ~ context, value.var = "ACC", fun.aggregate=mean)
+ax.agg.mean
+
+ax.agg.sd <- dcast(ax, spkr ~ context, value.var = "ACC", fun.aggregate=sd)
+ax.agg.sd
+```
+
+
+8.  Save all of the above in a well-documented R Markdown document.  Email me the .Rmd file (and if you use different or updated data from Day 2 Homework, send that to me, too).
