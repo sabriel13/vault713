@@ -1,0 +1,142 @@
+---
+title: "Day 7 Homework"
+author: "Alia Lancaster"
+output: html_document
+---
+
+1. Work on making progress on your Final Project.
+Plan of attack + code for what I've previously done
+
+Read in data and packages
+```{r}
+ax <- read.csv("ax_AL.csv")
+
+library(ggplot2)
+library(plyr)
+```
+
+
+1) create a column that is a factor similar to 'phoneme_pair' but that also takes into account the same pairs
+- in previous script, created a column for each phoneme pair
+
+```{r}
+ax$Ah <- ifelse(ax$phoneme_pair=="A-h" | ax$phoneme_pair=="A-A-" | ax$phoneme_pair == "hh","Ah",0)
+ax$Ah <- as.factor(ax$Ah)
+summary(ax$Ah)
+# repeat 26 times 
+
+```
+
+2) Add 4 factors for hits, misses, false alarms, and correct responses
+```{r}
+ax$HITS <- ifelse(ax$correct_response=="0" & ax$ACC==1,1,0)
+ax$FA <- ifelse(ax$correct_response=="0" & ax$ACC==0,1,0)
+ax$m <- ifelse(ax$correct_response=="1" & ax$ACC==0,1,0)
+ax$cr <- ifelse(ax$correct_response=="1" & ax$ACC==1,1,0)
+summary(ax)
+```
+
+
+3) calculate number of hits and false alarms for each subject, pair, and context.
+
+- accomplished by subestting by pair, then dply for each subject, context, and speaker
+```{r}
+#subset
+ax.Ah <- ax[ax$Ah == "Ah", ]
+ax.Ah <- droplevels(ax.Ah)
+
+# ddply
+dprime.table.Ah <- ddply (ax.Ah, c ("SubjectID", "context", "spkr"), summarize, meanACC = mean(ACC), meanRT = mean(RT), Hits = sum(HITS), FAlarms = sum(FA), miss = sum(m), cr= sum(cr), n = length(RT))
+
+head(dprime.table.Ah)
+summary(dprime.table.Ah)
+count(dprime.table.Ah$FAlarms)
+count(dprime.table.Ah$Hits)
+
+# repeat all code in this chunk 26 times
+
+```
+
+4) make a table with the frequency of special cases
+- Haven't done this before
+
+```{r}
+#pseudo-code
+save counts of FA and hits
+delete all cases except of 0 and 1
+put into a data frame and record the pair
+
+# real code
+```
+
+
+5) Dealt with special cases, calculate proportion of hits and false alarms, then d-prime.
+
+```{r}
+#replacing 0s and 1s 
+attach(dprime.table.Ah)
+dprime.table.Ah$pH <- ifelse((dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss)) ==1, 0.875, ifelse((dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss))==0, 0.125, dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss))) 
+dprime.table.Ah$pFA <- ifelse((dprime.table.Ah$FAlarms/(dprime.table.Ah$FAlarms + dprime.table.Ah$cr)) ==1, 0.986, ifelse((dprime.table.Ah$FAlarms/(dprime.table.Ah$FAlarms + dprime.table.Ah$cr))==0, 0.0135, dprime.table.Ah$FAlarms/(dprime.table.Ah$FAlarms + dprime.table.Ah$cr))) 
+detach(dprime.table.Ah)
+#dprime
+dprime.table.Ah$dprime <- qnorm(dprime.table.Ah$pH)-qnorm(dprime.table.Ah$pFA)
+
+dprime.table.Ah$pair <- "Ah"
+dprime.table.Ah$pair <- as.factor(dprime.table.Ah$pair)
+summary(dprime.table.Ah)
+
+```
+
+5b) Because I subset, I then put everything back together with rbind(), and then recreated the 'pu' and 'vvl' factors.
+
+```{r}
+#dprime.all1<- rbind (dprime.table.Ah, dprime.table.AH) 
+# repeat 25 times
+
+##### create columns for p/u and v/vl #####
+#attach(dprime.all)
+#dprime.all$pu[pair =="AH"] <- "pharyngeal"
+#dprime.all$pu[pair =="Rx"] <- "uvular"
+#dprime.all$pu[pair !="AH" & pair !="Rx"] <- "control"
+#detach(dprime.all)
+#dprime.all$pu <- as.factor(dprime.all$pu)
+#summary(dprime.all)
+
+#attach(dprime.all)
+#dprime.all$vvl[pair =="AR"] <- "voiced"
+#dprime.all$vvl[pair =="Hx"] <- "voiceless"
+#dprime.all$vvl[pair !="AR" & pair !="Hx"] <- "ccontrol"
+#detach(dprime.all)
+#dprime.all$vvl <- as.factor(dprime.all$vvl)
+#summary(dprime.all)
+
+```
+
+6) Use boxplots to view distribution of d-prime across contexts and by speaker
+```{r}
+ax.dprime <- read.csv("ax_dprime_cloze_AL.csv")
+summary(ax.dprime)
+#get rid of NAs
+ax.dprime <- ax.dprime[!is.na(ax.dprime$dprime),]
+#reorder context
+ax.dprime$context <- factor(ax.dprime$context, levels = c("Initial", "Medial", "Final"))
+
+
+ggplot(ax.dprime, aes(x=context, y=dprime, fill = speaker)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Context") + ylab("D-Prime") + theme_bw()
+
+ggplot(ax.dprime, aes(x=speaker, y=dprime, fill = pu)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Context") + ylab("D-Prime") + theme_bw()
+
+ggplot(ax.dprime, aes(x=speaker, y=dprime, fill = pu)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Context") + ylab("D-Prime") + theme_bw() + facet_grid (.~context)
+
+ggplot(ax.dprime, aes(x=speaker, y=dprime, fill = vvl)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Context") + ylab("D-Prime") + theme_bw()
+
+ggplot(ax.dprime, aes(x=speaker, y=dprime, fill = vvl)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Context") + ylab("D-Prime") + theme_bw() + facet_grid (.~context)
+
+```
+
+
+2. Document some road blocks you are running into.
+
+4. Send Scott special topics you're intersted in.
+
+3. Email them to me before 7am tomorrow. and repo name
