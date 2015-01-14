@@ -9,94 +9,119 @@ library(plyr)
 
 ```
 
+**Note:**
+I am using a different dataset for this homework and homework 5 because it includes d-prime, which I think will be more interesting to work with than RT or ACC.  It similar to the previous dataset, but with the addition of a column called 'dprime', which is the d-prime score caluclated for each subject, phoneme pair, and context, and 'cloze', which is accuracy from 0 to 1 on a cloze test I administered to second language pariticpants (native speakers were give a score of 1). 'MeanACC' and 'meanRT' are aggregated by SubjectID, context, and pair, which means it is a mean RT and accuracy across the 4 trials a participant saw of each pair type in each context. The 'pair' factor in this dataset is equivalent to 'phoneme_pair' in the old dataset, and the item and list information is gone.
 
 1. Change the column names of your data to something easier to work with.  If you like your column names, change them into something else reasonable, just for practice.
-- change the names of the columns that have capital letters
-- make a dataframe with the old and new names
+
+I changed the names of 3 columns and created a data frame with the old and new column names
 
 ```{r}
 # read in the data
-ax <- read.csv("ax_AL.csv")
+ax <- read.csv("ax_dprime_cloze_AL.csv")
+summary(ax)
 
 # change column names
 oldnames <- colnames(ax)
-ax <-rename(ax, c("Item" = "item", "SubjectID" = "subjectid", "RT" = "rt", "ACC" = "acc"))
-colnames(ax)
+oldnames
+ax <-rename(ax, c("FAlarms" = "falseAlarms", "Hits" = "hits", "cr" = "correctResponses"))
 newnames <- colnames(ax)
+newnames
 ax.colnames <- data.frame(oldnames, newnames)
 ax.colnames
 ```
 
 
 2. List ALL the issues you can see where it looks like your data is being read in a weird way.  If your data looks perfect, find some way to mess it up :-)
-- Issue #1 - the weird X column (probably since I wrote if from a previous R data.frame)
-- Issue #2 - some columns that are factors are being read in as numeric.  My fault since they all have numbers in them.  I'll tell R they are factors and add a string character to the variable (some of this from my third homework)
-  - Issue #2a - after pasting the string in or creating a new column, the variables are character vectors.  I changed them to factors
+**Issue 1**
+The  'X' column (probably since I created it from a previous R data frame).
 
-```{r}
-summary(ax)
-```
+**Issue 2**
+The 'SubjectID' column is being read in as numeric.  My fault since the Subject IDs are only numbers.  
 
 
 3. Pick one or two of the most egregious or problematic of the issues in #2 and fix them.
+**Issue 1**
+I deleated the 'X' column.
+
+**Issue 2**
+Using some code from homework 3, I created pasted "ID" to the end of each SubjectID.After pasting the string in, the variable is a character vector.  I changed it to a factor.
 
 ```{r}
-summary(ax)
 # get rid of first column
 ax <- ax[, -1]
 colnames(ax)
 
-# make some factors read in as numeric into factors.  Make a new column for 'correct_response' that is easier for me to process (same or different)
-ax$item <- paste(ax$item, "item", sep="")
-ax$subjectid <- paste(ax$subjectid, "id", sep = "")
-
-ax$correct_response <- as.factor(ax$correct_response)
-ax$samediff <- "same"
-ax$samediff[ax$correct_response=="0"] <- "diff"
-summary(ax$item)
-summary(ax$subjectid)
-summary(ax$samediff)
-
-ax$item <- as.factor(ax$item)
-ax$subjectid <- as.factor(ax$subjectid)
-ax$samediff <- as.factor(ax$samediff)
-summary(ax$item)
-summary(ax$subjectid)
-summary(ax$samediff)
+# Make 'SubjectID' into a factor with some strings
+summary(ax$SubjectID)
+ax$SubjectID <- paste(ax$SubjectID, "ID", sep = "")
+ax$SubjectID <- as.factor(ax$SubjectID)
+summary(ax$SubjectID)
 
 ```
 
 
 4. Check for NAs, and report where you see them (try to pinpoint where they are, not just "5 NAs in column seven".
-- There are no NAs.  I had some when the lists were 2 seperate datasets (I've attached these in the email).  These seem to be a function of the read.azk function.  I looked at the original AZK data file and
+
+There are 178 NAs in 'dprime' and in 'pH' (proportion of hits). Thus, it seems as if there were 178 instances in which both of the trials of a pair in a certain context for a participant were removed from the dataset on which dprime was calculated. I did trim the data by removing any RTs below and above 3sd for each pariticpant.
+
 
 ```{r}
-summary(ax$acc)
-
+summary(ax$dprime)
+summary(ax$pH)
+ax.NA <- ax[is.na(ax$dprime), ]
+summary(ax.NA)
+xtabs(~pair + context, data=ax.NA)
 ```
 
 5. Decide what you think you should do about the NAs, and say why.  If you can, try to implement this decision.
- - since the NAs do not indicate a lack of response, I will not keep them when I merge the lists.
+
+Judging by the summary and xtabs table in #3, it appears that most of the instances of NAs are in control pairs.  I have more control than non-control pairs.  For the purposes of this homework, I will drop all NA rows because they are mostly control pairs.
  
  
 ```{r}
-
+ax.noNA <- ax[!is.na(ax$dprime), ]
+summary(ax.noNA)
 ```
 
 6. Remove any problematic rows and/or columns.  Say why you want to remove them.  If there aren't any problems, describe why you think there are no problems.
-- I removed the weird 'X' column earlier.
-- Is there anything in the merged one to remove?
+
+Earlier, I removed the 'X' column.  I attempted to remove any pairs for which the dprime had an NA, which would make the number of control pairs similar to the number of target pairs. I wouldn't do this for a real analysis. However, the final step resulted in an error I couldn't solve.   
+
 
 ```{r}
-summary(ax$phoneme_pair_ordered)
+summary(ax$pair)
+ax.pu.noNA <- ax[ax$pu != "control" | !is.na(ax$dprime)  ,]
+summary(ax.pu.noNA)
+summary(ax.pu.noNA$pair)
 
+#get names of pairs that still have all 90 observations
+pair.counts <- summary(ax.pu.noNA$pair)
+pair.counts.melt <- melt(pair.counts)
+pair.counts.melt$pair <- names(pair.counts)
+pair.counts.melt
+pair.counts.melt <- subset(pair.counts.melt, pair.counts.melt$value == 90)
+pair.counts.melt
+pair.counts.melt$pair #copy and paste into next command
+
+ # This subsetting results in an error. 
+# ax.pu.noNA <- subset(ax.noNA, ax.noNA$pu != "control" | ax.noNA$pair== c("Ah", "AH", "AR", "As", "Ax" ,"hq" ,"Hq" ,"hs" ,"Hs" ,"hx", "qR", "qs", "qx", "Rs", "Rx", "sx"))
+# summary(ax.pu.noNA2$pair)
 ```
 
 
 7. Re-code at least one factor.  Provide a table that shows the correspondence between old levels and new levels.
 
-```{r}
+I releveled the 'context' factor. 
 
+```{r}
+vvlOldnames <- levels(ax.noNA$vvl)
+vvlOldnames
+ax.noNA$vvl <- factor(ax.noNA$vvl, levels = c("control", "voiced", "voiceless"))
+vvlNewnames <- levels(ax.noNA$vvl)
+vvlNewnames
+vvl.levelnames <- data.frame(vvlOldnames, vvlNewnames)
+vvl.levelnames
 ```
 
 
@@ -105,15 +130,15 @@ summary(ax$phoneme_pair_ordered)
   - I won't judge you on statistical expertise!  (though I will make comments if I think I can be helpful)
   - Report some key statistics from the analysis, using inline code
   
-- Use data with dprime?
 
 Analysis #1: ANCOVA with d-prime as DV
-Question:
+Question: Does sensitivity pharyngeal and uvular voiced and voiceless fricatives differ as a function of speaker status (native, L2) and context (initial, medial, final) when proficiency is taken into acocunt (cloze)?
 ```{r}
-# ANOVA on the effect of speaker, voicing (pu) and their interactions on reaction time/dprime
-aov.dp <- aov(data=ax, dprime ~ spkr * pu)
+# ANCOVA on the effect of speaker (native, L2), manner of articulation (pu) and their interactions on reaction time/dprime with cloze score as a covariate
+aov.dp <- aov(data=ax, dprime ~ speaker * pu * context  + cloze)
 sum.aov.dp <- summary(aov.dp)
 sum.aov.dp
+
 names(sum.aov.dp) # returns null. Weird.
 str(sum.aov.dp)
 
@@ -121,8 +146,8 @@ resid.df <- sum.aov.dp$Df
 resid.df # returns NULL.  Seems like there is another layer above that.
 # sum.aov.dp <- data.frame(summary(aov.dp)) # tried coercing it into a data.fram.  No luck.
 
-# tried running an lm instead, so see if the class was different
-lm.dp <- lm(data=ax, dprime ~ spkr * pu)
+# tried running an lm instead, so see if the class was different.  
+lm.dp <- lm(data=ax, dprime ~ speaker * pu * context + cloze)
 sum.lm.dp <- summary(lm.dp)
 sum.lm.dp #not quite what I want
 aov.lm.dp <- anova(lm.dp)
@@ -133,39 +158,79 @@ resid.df <- aov.lm.dp$Df[4]
 resid.df # it works!
 names(aov.lm.dp)
 
-# set values for repodp
-#f.spkr <- aov.lm.dp$F value[1] # get an error, R doesn't seem to like the space 
-f.spkr <- aov.lm.dp$F.value[1]
-f.spkr # retuns NULL
-
-# another solution I found later to get the same value from the summary of the aov() function. Found on stackoverflow (http://stackoverflow.com/questions/3366506/extract-p-value-from-aov)
+# set values for report
+# another solution I found later to get the same value from the summary of the aov() function. Found on stackoverflow (http://stackoverflow.com/questions/3366506/extract-p-value-from-aov).  So I used the aov() results. 
 resid.df2 <- sum.aov.dp[[1]]$Df[4]
 resid.df2
 names(sum.aov.dp[[1]])
 
+sum.aov.dp
 f.spkr <- sum.aov.dp[[1]]$F.value[1]
 f.spkr # retuns Null
 f.spkr <- sum.aov.dp[[1]][1,"F value"]
 f.spkr # this works. Something about using the dollar sign?
 f.pu <- sum.aov.dp[[1]][2,"F value"]
 f.pu
-f.spkrpu <- sum.aov.dp[[1]][3,"F value"]
-f.spkrpu
+f.context <- sum.aov.dp[[1]][3,"F value"]
+f.context
+f.cloze <- sum.aov.dp[[1]][4,"F value"]
+f.cloze
 
-#p.spkr <- sum.aov.dp[[1]]$Pr(>F)[1] # Get an error( "unexpected '>' ). Column name is copied from the names(sum.aov.dp[[1]]) output, so I don't think I'm missing a space.  Not sure what is going on here, so I'll use numbers to refer to the correct column
 p.spkr <- sum.aov.dp[[1]][1,"Pr(>F)"]
 p.spkr
 p.pu <- sum.aov.dp[[1]][2,"Pr(>F)"]
 p.pu
-p.spkrpu <- sum.aov.dp[[1]][3,"Pr(>F)"]
-p.spkrpu
+p.context <- sum.aov.dp[[1]][3,"Pr(>F)"]
+p.context
+p.cloze <- sum.aov.dp[[1]][3,"Pr(>F)"]
+p.cloze
 
-tukey.aov.dp <- TukeyHSD(aov.dp)
-tukey.aov.dp
 ```
 
 Report for d-prime anova:
 
-A two-was ANOVA was conducted on the effect of speaker group (native, L2) and manner of articiulation (pharyngeal, uvular, control) and their interactions on sensativity scores. There were main effects of speaker (F(1, `r resid.df`) = `r f.spkr`, p= `r p.spkr`) and manner of articulation (F(2, `r resid.df`) = `r f.pu`, p = `r p.pu`). There was also a significant interaction between speaker and manner of articulation (F(2, `r resid.df`) = `r f.spkrpu`, p = `r p.spkrpu`). 
+A three-way ANOVA was conducted on the effect of speaker group (native, L2), manner of articiulation (pharyngeal, uvular, control), and context (initial, medial, final) and their interactions on sensativity scores with cloze scores as a covariate. There were main effects of speaker (*F*(1, `r resid.df`) = `r f.spkr`, *p*= `r p.spkr`), manner of articulation (*F*(2, `r resid.df`) = `r f.pu`, *p* = `r p.pu`), context (*F*(2, `r resid.df`) = `r f.context`, *p* = `r p.context`), and cloze scores (*F*(1, `r resid.df`) = `r f.cloze`, *p* = `r p.cloze`).
+
+**Test 2: t-test comparing cloze scores for L2 to chance **
+Question: Are the cloze scores for L2 learners different than chance (chance = 1/3)?
+
+```{r}
+ax.L2 <- ax.noNA[ax.noNA$speaker=="L2", ]
+ax.L2 <- droplevels(ax.L2)
+summary(ax.L2)
+
+# right now, each cloze score is repeated many times. Aggregate so that have 1 cloze score for each participant
+# I realized this after performing the t-test and realizing the df was way to large and the mean was different than chance (which I had not expected it to be given chance is .33 and the mean is .352)
+ax.L2.means <- ddply(ax.L2, c("SubjectID"), summarise, meancloze = mean(cloze))
+ax.L2.means
+
+
+t.test(ax.L2.means$meancloze, mu=1/3)
+#my hypothesis is really that the learners would be better than chance, so I wil test that:
+results <- t.test(ax.L2.means$meancloze, mu=1/3, alternative= "greater")
+results
+str(results)
+#setting values for report
+t.cloze <- results$statistic
+t.cloze
+
+t.p <- results$p.value
+t.p
+
+t.df <- results$parameter
+t.df
+
+sd <- sd(ax.L2.means$meancloze)
+sd
+
+mean <- results$estimate
+mean
+```
+
+Report for one sample t-test:
+
+Overall, scores on the cloze task for second language learners of Arabic were not high (*M* = `r mean`, *SD* = `r sd`) and were not significantly different than chance, *t*(`r t.df`) = `r t.cloze`, *p* = `r t.p`. 
+
+
 
   
