@@ -1,0 +1,114 @@
+---
+title: "Day 8 Homework"
+author: "Alia Lancaster"
+output: html_document
+---
+packages
+```{r}
+library(reshape2)
+library(dplyr)
+library(ggplot2)
+```
+
+
+1. Try to recreate the results of Homework 6 (or your intended results) using the `dplyr` functions.
+
+Goal: Cell RT and ACC means and sd of 'context' by 'speaker' and 'pu' (pharyngeal, uvular, control)
+
+After my first attempt, all sd columns were NAN. I think this occured because I used the same column name ("meanRT") for both a column I created in summarize and on in the ax dataframe.  I figured this out because if I put the SD first in the summarize function, the NANs do not appear.  To avoid confusion, I will rename my new columns to something different than my old columns
+
+
+```{r}
+# read in data
+ax <- read.csv("ax_dprime_cloze_AL.csv")
+ax$context <- factor(ax$context, levels = c("Initial", "Medial", "Final"))
+
+# Attempt 1
+ax.context.means <- ax %>%
+  group_by(context, speaker, pu) %>%
+  summarize(meanACC = mean(meanACC), sdACC = sd(meanACC), meanRT= mean(meanRT), sdRT = sd(meanRT))
+ax.context.means
+
+# sd first = no NANs
+ax.context.means2 <- ax %>%
+  group_by(context, speaker, pu) %>%
+  summarize(sd=sd(meanRT), sdACC = sd(meanACC), meanRT=mean(meanRT), meanACC = mean(meanACC))
+ax.context.means2
+
+#solution
+ax.context.means.final <- ax %>%
+  group_by(context, speaker, pu) %>%
+  summarize(allmeanRT=mean(meanRT), sdRT=sd(meanRT), allmeanACC = mean(meanACC), sdACC = sd(meanACC))
+ax.context.means.final
+
+ggplot(ax.context.means.final, aes(x=context, y=allmeanACC, fill=speaker)) + geom_bar(stat="identity", position=position_dodge())
+
+
+```
+
+
+2. Find another kind of analysis/transformation/summary stat that you want to apply across multiple groups in your data. Use the functions from `reshape2` and `dplyr` to get these results.
+
+Goal: Mean and sd of dprime by 'pair', but only if 'ph' is greater than 0.20 and 'pFA' is greater  than 0.02. 
+
+```{r}
+
+dprime.means <- ax %>%
+  filter(pH > 0.2| pFA > 0.2) %>%
+  dcast(.~pair, value.var = "dprime", fun.aggregate= mean, na.rm=TRUE)
+dprime.means
+
+
+#double check that it is the same as:
+ax.subset <- ax[ax$pH >.2 | ax$pFA>.2, ]
+dprime.means2 <- summarize(ax.subset %>% group_by(pair), meandp= mean(dprime))
+dprime.means2
+
+# if I really want a df output or do more than just the mean
+dprime.means3 <- ax %>%
+  filter(pH > 0.2| pFA > 0.2) %>%
+  group_by(pair) %>%
+  summarize(meandp= mean(dprime), sddp = sd(dprime))
+dprime.means3
+
+```
+
+
+3. For more practice, try another example of something like #2 (find another stat or grouping or something).
+
+Goal: T-test of dprime and speaker group, but first throw out any rows with RT below 2SD
+
+```{r}
+mean(ax$meanRT) - sd(ax$meanRT) *2
+hist(ax$meanRT)
+
+ax %>%
+  filter(meanRT > mean(meanRT) - sd(meanRT)*2) %>%
+  t.test(dprime~speaker, data=.)
+
+# check to make sure it is different than without the filter
+t.test(ax$dprime~ax$speaker)
+
+# check to make sure it is the same as doing it another way
+ax.2sd <- ax[ax$meanRT > mean(ax$meanRT)- sd(ax$meanRT) *2, ]
+t.test(ax.2sd$dprime ~ ax.2sd$speaker)
+```
+
+
+4. Do yet another case of #2 above, but this time throw in a transformation, too.
+
+Similar to the practice, I dropped instances in which the mean accuracy was less than that of the mean accuracy of the context/speaker (e.g., initial-L2). Then I melted by 'meanACC' and 'meanRT', and got mean RT and ACC and sd RT and ACC for each context/speaker/pu. 
+
+```{r}
+
+ax %>%
+  group_by(context, speaker) %>%
+  mutate(newmeanACC = mean(meanACC)) %>%
+  filter(meanACC > newmeanACC) %>%
+  melt(measure.vars = 5:6) %>%
+  group_by(context, speaker, pu, variable) %>%
+  summarize (mean = mean(value), sd = sd(value))
+
+
+```
+
