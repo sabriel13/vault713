@@ -1,0 +1,104 @@
+---
+title: "Day 9 Homework"
+author: "Alia Lancaster"
+output: html_document
+---
+packages and functions
+```{r}
+library(dplyr)
+library(reshape2)
+```
+
+
+1. Write a function to do a bunch of clean-up and formatting to your data.
+
+Note: I'm using the dataset without dprime, "ax_AL.csv".  Both datasets I've used should be in my repo.
+
+
+```{r}
+ax <- read.csv("ax_AL.csv")
+summary(ax)
+
+
+# what I want my function to do
+
+# create hits, FA, misses, and cr columns then calculate proportions of hits and false alarms.  Just a skelton for now, since the pairs aren't quite right.
+ax$HITS <- ifelse(ax$correct_response=="0" & ax$ACC==1,1,0)
+ax$FA <- ifelse(ax$correct_response=="0" & ax$ACC==0,1,0)
+ax$m <- ifelse(ax$correct_response=="1" & ax$ACC==0,1,0)
+ax$cr <- ifelse(ax$correct_response=="1" & ax$ACC==1,1,0)
+summary(ax)
+
+#cbind
+one <- vector(length=nrow(ax))
+ax<- cbind(ax, one)
+names(ax)
+
+# function
+make.newcol <- function(data){
+  HITS <- ifelse(data$correct_response=="0" & data$ACC==1,1,0)
+  FA <- ifelse(data$correct_response=="0" & data$ACC==0,1,0)
+  m <- ifelse(data$correct_response=="1" & data$ACC==0,1,0)
+  cr <- ifelse(data$correct_response=="1" & data$ACC==1,1,0)
+  data <- cbind(data, HITS, FA, m, cr) 
+}
+
+```
+
+
+2. Make sure this function works on your data.
+
+```{r}
+ax <- read.csv("ax_AL.csv")
+ax <- make.newcol(ax)
+summary(ax)
+
+```
+
+
+3. Get some subset of your data, or find a similar-but-not-identical data set.  Change up the column order.  Re-run your function on this new data.  Does it work?
+
+The function works on my data because I used column names instead of numbers.
+
+```{r}
+#subset
+ax.subset <- read.csv("ax_AL.csv")
+names(ax.subset)
+ax.subset <- ax[,c(2:8, 12:17)]
+names(ax.subset)
+
+# reorder columns in dataframe
+ax.subset <- ax.subset[c(3,4, 1, 2, 13, 12, 11, 10, 9, 8, 7, 6, 5)]
+names(ax.subset)
+
+# does the function work? Yes!
+ax.subset <- make.newcol(ax.subset)
+summary(ax.subset)
+```
+
+
+4. Fix your function to be able to work on the new data.
+
+5. Write a function to do some kind of summary stat, and use the `dplyr` functions to run this function over groups of your data.
+
+ I wrote a function to calculate the proportion of two vectors to generate the of hits (hits/hits+ misses) and proportion of false alarms (fa/fa+cr).  I then used the dplyr functions to apply this function over each Subject/context group and add this vector to the existing dataframe. These new columns (pH and pFA) will be used later to calculate d-prime (but after a few more changes to the data).
+ 
+ 
+```{r}
+prop <- function(vector1, vector2){
+  numer <- sum(vector1)
+  denom <- sum(vector1) + sum(vector2)
+  output <- numer/denom
+  output
+}
+
+prop(ax$HITS, ax$m)
+
+ax <- ax %>%
+  group_by(SubjectID, context) %>%
+  mutate(pH = prop(HITS, m), pFA = prop(FA, cr))
+
+summary(ax)  
+
+```
+
