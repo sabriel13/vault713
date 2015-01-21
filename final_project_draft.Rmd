@@ -70,30 +70,42 @@ summary(ax)
 ```
 
 
-3) calculate number of hits and false alarms for each subject, pair, and context.
+3) calculate number of proportion of hits and false alarms for each pair, subject, context.
 
 - accomplished by subestting by pair, then dply for each subject, context, and speaker
 - can't use dplyr because Ah column overlaps with the AR column in same pairs, so have to do a for loop
 - use the prop function I created for a homework to skip the step of calc the sum of each hit, fa, cr, m.  
+- could use apply?
 
 ```{r eval=FALSE}
-# for loop
-for(column in columnsAh-xz){
-  subset
-  dplyr
-  rbind to a dataframe
-}
+# use appply, column-wise
+ax <- apply(ax[, 20-47], MARGIN = 2, 
+            )
 
-#subset
-ax.Ah <- ax[ax$Ah == "Ah", c("Item", "SubjectID", "context", "correct_response","RT", "ACC", "spkr", "pu", "vvl", "list", "hits", "fa", "m", "cr") ]
-ax.Ah <- droplevels(ax.Ah)
-summary(ax.Ah)
-#dplyr
-ax.Ah <- ax.Ah %>%
-  #melt(measure.vars = c("hits", "fa", "m", "cr")) %>%
-  group_by(SubjectID, context) %>%
-  mutate(pH = prop(hits, m), pFA = prop(fa, cr))
-#somehow use this (but without saving it to an object) to record 0 and 1
+# for loop
+dprime.all <- data.frame(Item=NA, SubjectID=NA, context=NA, correct_response=NA, RT=NA, ACC=NA, spkr=NA, pu=NA, vvl=NA, list=NA, hits=NA, fa=NA, m=NA, cr=NA, pH=NA, pFA=NA, pair=NA)
+this.subset <- data.frame(Item=NA, SubjectID=NA, context=NA, correct_response=NA, RT=NA, ACC=NA, spkr=NA, pu=NA, vvl=NA, list=NA, hits=NA, fa=NA, m=NA, cr=NA)
+
+
+for(column in colnames(ax[, c(20:47)])){
+  this.subset <- ax[ax[,column] == column, c("Item", "SubjectID", "context", "correct_response","RT", "ACC", "spkr", "pu", "vvl", "list", "hits", "fa", "m", "cr") ]
+  this.subset <- droplevels(this.subset)
+  this.subset <- this.subset %>%
+    group_by(SubjectID, context) %>%
+    mutate(pH = prop(hits, m), pFA = prop(fa, cr), pair = column)
+  dprime.all <- rbind(dprime.all, this.subset)
+}
+#the rbind made some of my factors into characters, so change them back to factors
+dprime.all$pair <- as.factor(dprime.all$pair)
+dprime.all$context <- as.factor(dprime.all$context)
+dprime.all$spkr <- as.factor(dprime.all$spkr)
+dprime.all$pu <- as.factor(dprime.all$pu)
+dprime.all$vvl <- as.factor(dprime.all$vvl)
+dprime.all$list <- as.factor(dprime.all$list)
+#drop the NA
+dprime.all <- dprime.all[!is.na(dprime.all$context), ]
+summary(dprime.all)
+
 
 
 prop <- function(vector1, vector2){
@@ -105,30 +117,6 @@ prop <- function(vector1, vector2){
 
 prop(ax$HITS, ax$m)
 
-ax <- ax %>%
-  group_by(SubjectID, context) %>%
-  mutate(pH = prop(HITS, m), pFA = prop(FA, cr))
-
-summary(ax)
-
-minpair %>%
-  group_by(Corpus) %>%
-  mutate(medHST = median(HiSegTok)) %>%
-  filter(HiSegTok > medHST) %>%
-  melt(measure.vars = 14:17) %>%
-  group_by(variable, Corpus, Merged) %>%
-#  summarize(minlog = min(log(value)), maxlog = max(log(value)), mean = mean(log(value)))
-  xtabs(~ medHST + Corpus, data = .)
-
-# ddply
-dprime.table.Ah <- ddply (ax.Ah, c ("SubjectID", "context", "spkr"), summarize, meanACC = mean(ACC), meanRT = mean(RT), Hits = sum(HITS), FAlarms = sum(FA), miss = sum(m), cr= sum(cr), n = length(RT))
-
-head(dprime.table.Ah)
-summary(dprime.table.Ah)
-count(dprime.table.Ah$FAlarms)
-count(dprime.table.Ah$Hits)
-
-# repeat all code in this chunk 26 times
 
 ```
 
@@ -140,8 +128,11 @@ count(dprime.table.Ah$Hits)
 save counts of FA and hits
 delete all cases except of 0 and 1
 put into a data frame and record the pair
-
+xtabs(~pH +pair, data=dprime.all)
 # real code
+dprime.all %>%
+  group_by(SubjectID, context, p) %>%
+  summarize()
 ```
 
 
