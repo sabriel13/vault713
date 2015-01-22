@@ -1,0 +1,202 @@
+---
+title: "final project draft"
+author: "Alia Lancaster"
+output: html_document
+---
+Read in data and packages
+```{r}
+ax <- read.csv("ax_AL.csv")
+
+library(ggplot2)
+library(dplyr)
+library(reshape2)
+```
+
+
+1) create a column that is a factor similar to 'phoneme_pair' but that also takes into account the same pairs
+- in previous script, created a column for each phoneme pair
+- plan: split 'phoneme_pair' column.  Then create a new column for for each pair, including the same pairs (need to because the same pair the the same for some pairs, e.g., Ah and Ax)
+
+```{r}
+length(ax$phoneme_pair) #21264
+# make all of the strings in 'phoneme_pair' equal to 2 characters.  Take out or replace "-"
+summary(ax$phoneme_pair)
+ax$phoneme_pair <- factor(gsub("A-", "A", ax$phoneme_pair))
+ax$phoneme_pair <- factor(gsub("h-", "H", ax$phoneme_pair))
+summary(ax$phoneme_pair) # it worked!
+
+#split by nothing and rbind to ax
+sst <- do.call(rbind, strsplit(as.character(ax$phoneme_pair), ""))
+length(sst[,2]) #21264
+head(sst)
+tail(sst)
+phoneme1 <- sst[,1]
+phoneme2 <- sst[,2]
+ax <- cbind(ax, phoneme1, phoneme2)
+names(ax)
+
+# for every phoneme pair that is different (i.e., when correct_response is 0)
+paircol <- vector(length=length(ax$phoneme_pair))
+for(pair in levels(droplevels(ax[ax$correct_response==0, "phoneme_pair"]))){
+    pair1 <- strsplit(as.character(pair), "")[[1]][1]
+    pair2 <- strsplit(as.character(pair), "")[[1]][2]
+    paircol <- factor(ifelse(ax$phoneme_pair==pair, pair, ifelse(ax$correct_response==1 &  ax$phoneme1==pair1, pair, ifelse(ax$correct_response==1 & ax$phoneme1 ==pair2, pair, 0))))
+    ax<- cbind(ax, paircol)
+    names(ax)[names(ax)=="paircol"] <- pair
+  }
+
+# check to see if it worked
+names(ax)
+length(ax$Ah)
+summary(ax$Ah)
+summary(ax$phoneme_pair) # from this, I see that there are 384 rows with Ah, 1341 for AA, and 1341 for hh.  This means that Ah should have 3068 rows (384+1341+1341) in ax$Ah 
+
+```
+
+2) Add 4 factors for hits, misses, false alarms, and correct responses
+- Function for this from a homework (but improved to make more general by adding column names to function arguments).
+- TO DO: add more to clean up data in any way?
+
+```{r}
+make.newcol <- function(data, x, x2){
+  hits <- ifelse(data[,x]=="0" & data[,x2]==1,1,0)
+  fa <- ifelse(data[,x]=="0" & data[,x2]==0,1,0)
+  m <- ifelse(data[,x]=="1" & data[,x2]==0,1,0)
+  cr <- ifelse(data[,x]=="1" & data[,x2]==1,1,0)
+  data <- cbind(data, hits, fa, m, cr) 
+}
+ax <- make.newcol(ax, "correct_response", "ACC")
+summary(ax)
+```
+
+
+3) calculate number of proportion of hits and false alarms for each pair, subject, context.
+
+- accomplished by subestting by pair, then dply for each subject, context, and speaker
+- can't use dplyr because Ah column overlaps with the AR column in same pairs, so have to do a for loop
+- use the prop function I created for a homework to skip the step of calc the sum of each hit, fa, cr, m.  
+- could use apply?
+
+```{r eval=FALSE}
+# use appply, column-wise
+ax <- apply(ax[, 20-47], MARGIN = 2, 
+            )
+
+# for loop
+dprime.all <- data.frame(Item=NA, SubjectID=NA, context=NA, correct_response=NA, RT=NA, ACC=NA, spkr=NA, pu=NA, vvl=NA, list=NA, hits=NA, fa=NA, m=NA, cr=NA, pH=NA, pFA=NA, pair=NA)
+this.subset <- data.frame(Item=NA, SubjectID=NA, context=NA, correct_response=NA, RT=NA, ACC=NA, spkr=NA, pu=NA, vvl=NA, list=NA, hits=NA, fa=NA, m=NA, cr=NA)
+
+
+for(column in colnames(ax[, c(20:47)])){
+  this.subset <- ax[ax[,column] == column, c("Item", "SubjectID", "context", "correct_response","RT", "ACC", "spkr", "pu", "vvl", "list", "hits", "fa", "m", "cr") ]
+  this.subset <- droplevels(this.subset)
+  this.subset <- this.subset %>%
+    group_by(SubjectID, context) %>%
+    mutate(pH = prop(hits, m), pFA = prop(fa, cr), pair = column)
+  dprime.all <- rbind(dprime.all, this.subset)
+}
+#the rbind made some of my factors into characters, so change them back to factors
+dprime.all$pair <- as.factor(dprime.all$pair)
+dprime.all$context <- as.factor(dprime.all$context)
+dprime.all$spkr <- as.factor(dprime.all$spkr)
+dprime.all$pu <- as.factor(dprime.all$pu)
+dprime.all$vvl <- as.factor(dprime.all$vvl)
+dprime.all$list <- as.factor(dprime.all$list)
+#drop the NA
+dprime.all <- dprime.all[!is.na(dprime.all$context), ]
+summary(dprime.all)
+
+
+
+prop <- function(vector1, vector2){
+  numer <- sum(vector1)
+  denom <- sum(vector1) + sum(vector2)
+  output <- numer/denom
+  output
+}
+
+prop(ax$HITS, ax$m)
+
+
+```
+
+4) make a table with the frequency of special cases
+- Haven't done this before
+
+```{r}
+#pseudo-code
+save counts of FA and hits
+delete all cases except of 0 and 1
+put into a data frame and record the pair
+xtabs(~pH +pair, data=dprime.all)
+# real code
+dprime.all %>%
+  group_by(SubjectID, context, p) %>%
+  summarize()
+```
+
+
+5) Dealt with special cases, calculate proportion of hits and false alarms, then d-prime.
+
+```{r}
+#replacing 0s and 1s 
+attach(dprime.table.Ah)
+dprime.table.Ah$pH <- ifelse((dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss)) ==1, 0.875, ifelse((dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss))==0, 0.125, dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss))) 
+dprime.table.Ah$pFA <- ifelse((dprime.table.Ah$FAlarms/(dprime.table.Ah$FAlarms + dprime.table.Ah$cr)) ==1, 0.986, ifelse((dprime.table.Ah$FAlarms/(dprime.table.Ah$FAlarms + dprime.table.Ah$cr))==0, 0.0135, dprime.table.Ah$FAlarms/(dprime.table.Ah$FAlarms + dprime.table.Ah$cr))) 
+detach(dprime.table.Ah)
+#dprime
+dprime.table.Ah$dprime <- qnorm(dprime.table.Ah$pH)-qnorm(dprime.table.Ah$pFA)
+
+dprime.table.Ah$pair <- "Ah"
+dprime.table.Ah$pair <- as.factor(dprime.table.Ah$pair)
+summary(dprime.table.Ah)
+
+```
+
+5b) Because I subset, I then put everything back together with rbind(), and then recreated the 'pu' and 'vvl' factors.
+
+```{r}
+#dprime.all1<- rbind (dprime.table.Ah, dprime.table.AH) 
+# repeat 25 times
+
+##### create columns for p/u and v/vl #####
+#attach(dprime.all)
+#dprime.all$pu[pair =="AH"] <- "pharyngeal"
+#dprime.all$pu[pair =="Rx"] <- "uvular"
+#dprime.all$pu[pair !="AH" & pair !="Rx"] <- "control"
+#detach(dprime.all)
+#dprime.all$pu <- as.factor(dprime.all$pu)
+#summary(dprime.all)
+
+#attach(dprime.all)
+#dprime.all$vvl[pair =="AR"] <- "voiced"
+#dprime.all$vvl[pair =="Hx"] <- "voiceless"
+#dprime.all$vvl[pair !="AR" & pair !="Hx"] <- "ccontrol"
+#detach(dprime.all)
+#dprime.all$vvl <- as.factor(dprime.all$vvl)
+#summary(dprime.all)
+
+```
+
+6) Use boxplots to view distribution of d-prime across contexts and by speaker
+```{r}
+ax.dprime <- read.csv("ax_dprime_cloze_AL.csv")
+summary(ax.dprime)
+#get rid of NAs
+ax.dprime <- ax.dprime[!is.na(ax.dprime$dprime),]
+#reorder context
+ax.dprime$context <- factor(ax.dprime$context, levels = c("Initial", "Medial", "Final"))
+
+
+ggplot(ax.dprime, aes(x=context, y=dprime, fill = speaker)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Context") + ylab("D-Prime") + theme_bw()
+
+ggplot(ax.dprime, aes(x=speaker, y=dprime, fill = pu)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Context") + ylab("D-Prime") + theme_bw()
+
+ggplot(ax.dprime, aes(x=speaker, y=dprime, fill = pu)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Context") + ylab("D-Prime") + theme_bw() + facet_grid (.~context)
+
+ggplot(ax.dprime, aes(x=speaker, y=dprime, fill = vvl)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Context") + ylab("D-Prime") + theme_bw()
+
+ggplot(ax.dprime, aes(x=speaker, y=dprime, fill = vvl)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Context") + ylab("D-Prime") + theme_bw() + facet_grid (.~context)
+
+```
+
