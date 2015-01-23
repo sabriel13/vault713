@@ -82,9 +82,7 @@ To Do:
 
 Proportion:
 ```{r}
-# use appply, column-wise
-ax <- apply(ax[, 20-47], MARGIN = 2, 
-            )
+
 
 # for loop
 dprime.all <- data.frame(Item=NA, SubjectID=NA, context=NA, correct_response=NA, RT=NA, ACC=NA, spkr=NA, pu=NA, vvl=NA, list=NA, hits=NA, fa=NA, m=NA, cr=NA, pH=NA, pFA=NA, pair=NA)
@@ -213,42 +211,67 @@ counts <- ax %>%
 write.csv(counts, "counts.csv")
 
 counts[1:40, ]
-
+## for loop pseudo code
+output <- as.data.frame (x=NA)
+for (eachpair in levels(dprime.all$pair)){
+  group_by(dprime.all, SubjectID, context) %>%
+  if (pH ==1){
+    pH <- 0.875
+  }
+  output <-mutate(dprime = qnorm(pH)- qnorm(pFA))
+}
+output
 # if can't calc from data, create a "max hits" and "max false alarms" variables
 
 dprime.all2 <- dprime.all %>%
   group_by(SubjectID, pair, context) %>%
-  summarize(dprime = dprimeNum("pH", "pFA"))f
+  summarize(dprime = dprimeNum(mean(pH), mean(pFA)))
 dprime.all2  
 
-pH <- c(.89, .69, .99, .78)
+eachpair <- "Ah"
+
+pH1 <- c(.89, .69, .99, 1)
+pH <- c(.89, .69, .99, .875)
 pFA <- c(.33, .45, .22, .34)
-qnorm(pH) - qnorm(pFA)
+qnorm(mean(pH)) - qnorm(mean(pFA))
 
 #function with numbers directly.  Works for numbers but not for vectors?
 dprimeNum <- function (pH, pFA) {
+  #for(num in length(pH)){
   if (pH==1 ){
-  pH <- 0.875
-  #output <- qnorm(pH) - qnorm(pFA)
-} 
+  0.875
+} else pH
 if (pFA==1){
-  pFA <- 0.984375
-  #output <- qnorm(pH)-qnorm(pFA)
- } 
+  0.984375
+ } else pFA
 if (pH==0){
-  pH <- 0.124
-  #output <- qnorm(pH) - qnorm(pFA)
- } 
+  0.124
+ } else pH
 if (pFA==0){
-  pFA <- 0.015625
-  #output <- qnorm(pH) - qnorm(pFA)
-  }
- output <- qnorm(pH) - qnorm(pFA)
+  0.015625
+  } else pFA
+#}
+ output <- qnorm(mean(pH)) - qnorm(mean(pFA))
 output
 }
 
-x <- dprimeNum(dprime.all, "pH", "pFA")
+x <- dprimeNum(pH, pFA)
 x
+
+# another function using gsub
+
+dprime.gs <- function(pH, pFA){
+    <- gsub(1, 0.875, pH)
+
+output <- qnorm(pH) - qnorm(pFA)
+}
+
+
+dprime2 <- function(pH, pFA){
+  dprime.table.Ah$pH <- ifelse((dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss)) ==1, 0.875, ifelse((dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss))==0, 0.125, dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss))) 
+dprime.table.Ah$pFA <- ifelse((dprime.table.Ah$FAlarms/(dprime.table.Ah$FAlarms + dprime.table.Ah$cr)) ==1, 0.986, ifelse((dprime.table.Ah$FAlarms/(dprime.table.Ah$FAlarms + dprime.table.Ah$cr))==0, 0.0135, dprime.table.Ah$FAlarms/(dprime.table.Ah$FAlarms + dprime.table.Ah$cr)))
+  
+}
   
 std.err <- function(x, ignore.na = TRUE) { 
   if(!ignore.na) {
