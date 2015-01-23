@@ -49,7 +49,7 @@ for(pair in levels(droplevels(ax[ax$correct_response==0, "phoneme_pair"]))){
 names(ax)
 length(ax$Ah)
 summary(ax$Ah)
-summary(ax$phoneme_pair) # from this, I see that there are 384 rows with Ah, 1341 for AA, and 1341 for hh.  This means that Ah should have 3068 rows (384+1341+1341) in ax$Ah 
+summary(ax$phoneme_pair) # from this, I see that there are 384 rows with Ah, 1341 for AA, and 1341 for hh.  This means that Ah should have 3069 rows (384+1341+1341) in ax$Ah 
 
 ```
 
@@ -77,7 +77,11 @@ summary(ax)
 - use the prop function I created for a homework to skip the step of calc the sum of each hit, fa, cr, m.  
 - could use apply?
 
-```{r eval=FALSE}
+To Do:
+- there are no 1's in pFA for pair and subject. This messes up the number of columns after the cast.
+
+Proportion:
+```{r}
 # use appply, column-wise
 ax <- apply(ax[, 20-47], MARGIN = 2, 
             )
@@ -117,28 +121,146 @@ prop <- function(vector1, vector2){
 
 prop(ax$HITS, ax$m)
 
-
 ```
 
-4) make a table with the frequency of special cases
-- Haven't done this before
+make tables of number of special cases
+```{r eval=FALSE}
 
-```{r}
+
 #pseudo-code
 save counts of FA and hits
 delete all cases except of 0 and 1
 put into a data frame and record the pair
 xtabs(~pH +pair, data=dprime.all)
 # real code
-dprime.all %>%
-  group_by(SubjectID, context, p) %>%
-  summarize()
+pH <- dprime.all %>%
+  group_by(SubjectID, context) %>%
+  xtabs(~ pair + pH, data=.)
+# create a function.  Want this for ph, pfa, use subject or context instead of pair
+
+
+data <- dprime.all
+groupvar <- "pair"
+numvar <- "pFA"
+
+myfunc <- function(data, groupvar, numvar){
+  groupvar.sum<- xtabs(~data[, groupvar] + data[,numvar], data=data)
+  groupvar.sum <- as.data.frame(groupvar.sum)
+  groupvar.sum <- groupvar.sum[groupvar.sum[,2]==0 | groupvar.sum[, 2]==1, ]
+  groupvar.cast <- dcast(groupvar.sum, groupvar.sum[,1] ~ groupvar.sum[,2], value.var="Freq")
+  #names(groupvar.cast)[names(groupvar.cast)=="0"] <- paste("numvar", "0", sep = "")
+  #names(groupvar.cast)[names(groupvar.cast)=="1"] <- paste("numvar", "1", sep = "")
+  total <- xtabs(~data[, groupvar], data=data)
+  total <- as.data.frame(total)
+  final.df <- cbind(groupvar.cast, total[, 2])
+  #final.df <- merge(groupvar.cast, total, by.y = groupvar.cast[, 1], by.x=total[, 1])
+  #names(final.df)[names(final.df)=="Freq"] <- "total"
+  final.df$Perc0 <- round((final.df[, "0"]/final.df[,4])*100, digits=3)
+  final.df$Perc1 <- round((final.df[, "1"]/final.df[,4])*100, digits=3)
+  final.df$TotalPerc <- final.df$Perc0 + final.df$Perc1
+  output <- final.df
+}
+
+pH2 <- myfunc(dprime.all, "pair", "pH")
+
+#check to make sure that the function gets the same output as when I did it once:
+pH<- xtabs(~pair + pH, data=dprime.all)
+pH <- as.data.frame(pH)
+pH <- pH[pH$pH==0 | pH$pH==1, ]
+head(pH)
+pH <- dcast(pH[1:56, ], pair ~ pH, value.var="Freq")
+names(pH)[names(pH)=="0"] <- "pH0"
+names(pH)[names(pH)=="1"] <- "pH1"
+total <- xtabs(~pair, data=dprime.all)
+total <- as.data.frame(total)
+pH.total <- merge(pH, total)
+names(pH.total)[names(pH.total)=="Freq"] <- "total"
+pH.total$pH0Perc <- round((pH.total$pH0/pH.total$total)*100, digits=3)
+pH.total$pH1Perc <- round((pH.total$pH1/pH.total$total)*100, digits=3)
+pH.total$pHTotalPerc <- pH.total$pH0Perc + pH.total$pH1Perc
+
+#these should have the same numbers
+head(pH.total)
+head(pH2)
+
+#now run the function with pair/pFA, subjectID/pH, and subjectID/pFA:
+pair.pH <-myfunc(dprime.all, "pair", "pH")
+subject.pH <- myfunc(dprime.all, "SubjectID", "pH")
+subject.pFA <- myfunc(dprime.all, "SubjectID", "pFA")
+
+
+
 ```
 
 
-5) Dealt with special cases, calculate proportion of hits and false alarms, then d-prime.
+5) Dealt with special cases, then d-prime.
+Replacements:
+- hits: 4 trials, so 4/4 is the most possible hits and 0/4 is the least possible hits. The next highers number of hits is 3/4 = .75, and the next lowest number of hits is 1/4 = .25.  Replace 1 with the value halfway between 1 and .75, which is .875. Replace 0 with the value halfway between 0 and .25, which is 0.124
+- false alarms: 32 trials.  The next highest number of false alarms is 31/33 = 0.96875, and the next lowest number of false alarms is 1/32 = 0.03125. Replace 1 with the value halfway between 1 and .96875, which is 0.984375.  Replace 0 with the value halfway between 0 and 0.03125, which is 0.015625.   
+
+- I know these numbers from the design.  But can also get from the data using max()
+
+
 
 ```{r}
+## replacements
+length(dprime.all[dprime.all$correct_response==1 & dprime.all$pair=="Ah", ])
+
+counts <- ax %>% 
+  group_by(SubjectID, context, phoneme_pair) %>%
+  summarize(max = length(RT))
+
+write.csv(counts, "counts.csv")
+
+counts[1:40, ]
+
+# if can't calc from data, create a "max hits" and "max false alarms" variables
+
+dprime.all2 <- dprime.all %>%
+  group_by(SubjectID, pair, context) %>%
+  summarize(dprime = dprimeNum("pH", "pFA"))f
+dprime.all2  
+
+pH <- c(.89, .69, .99, .78)
+pFA <- c(.33, .45, .22, .34)
+qnorm(pH) - qnorm(pFA)
+
+#function with numbers directly.  Works for numbers but not for vectors?
+dprimeNum <- function (pH, pFA) {
+  if (pH==1 ){
+  pH <- 0.875
+  #output <- qnorm(pH) - qnorm(pFA)
+} 
+if (pFA==1){
+  pFA <- 0.984375
+  #output <- qnorm(pH)-qnorm(pFA)
+ } 
+if (pH==0){
+  pH <- 0.124
+  #output <- qnorm(pH) - qnorm(pFA)
+ } 
+if (pFA==0){
+  pFA <- 0.015625
+  #output <- qnorm(pH) - qnorm(pFA)
+  }
+ output <- qnorm(pH) - qnorm(pFA)
+output
+}
+
+x <- dprimeNum(dprime.all, "pH", "pFA")
+x
+  
+std.err <- function(x, ignore.na = TRUE) { 
+  if(!ignore.na) {
+    output <- sd(x)/sqrt(length(x)) 
+  } else {
+    numer <- sd(x, na.rm = TRUE)
+    denom <- sqrt(length(which(!is.na(x))))
+    output <- numer/denom
+  }
+  output
+}
+
 #replacing 0s and 1s 
 attach(dprime.table.Ah)
 dprime.table.Ah$pH <- ifelse((dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss)) ==1, 0.875, ifelse((dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss))==0, 0.125, dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss))) 
