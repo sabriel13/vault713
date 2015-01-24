@@ -75,38 +75,41 @@ summary(ax)
 - accomplished by subestting by pair, then dply for each subject, context, and speaker
 - can't use dplyr because Ah column overlaps with the AR column in same pairs, so have to do a for loop
 - use the prop function I created for a homework to skip the step of calc the sum of each hit, fa, cr, m.  
-- could use apply?
 
 To Do:
 - there are no 1's in pFA for pair and subject. This messes up the number of columns after the cast.
+- the length of the columns after the for loop is 4x longer (85249)
+
+28 pairs, 32 subjects =896 per context
 
 Proportion:
 ```{r}
-
+dprime.all <- data.frame()
+this.subset <- data.frame()
 
 # for loop
-dprime.all <- data.frame(Item=NA, SubjectID=NA, context=NA, correct_response=NA, RT=NA, ACC=NA, spkr=NA, pu=NA, vvl=NA, list=NA, hits=NA, fa=NA, m=NA, cr=NA, pH=NA, pFA=NA, pair=NA)
-this.subset <- data.frame(Item=NA, SubjectID=NA, context=NA, correct_response=NA, RT=NA, ACC=NA, spkr=NA, pu=NA, vvl=NA, list=NA, hits=NA, fa=NA, m=NA, cr=NA)
-
 
 for(column in colnames(ax[, c(20:47)])){
   this.subset <- ax[ax[,column] == column, c("Item", "SubjectID", "context", "correct_response","RT", "ACC", "spkr", "pu", "vvl", "list", "hits", "fa", "m", "cr") ]
   this.subset <- droplevels(this.subset)
-  this.subset <- this.subset %>%
-    group_by(SubjectID, context) %>%
-    mutate(pH = prop(hits, m), pFA = prop(fa, cr), pair = column)
-  dprime.all <- rbind(dprime.all, this.subset)
+  this.sum <- this.subset %>%
+    group_by(SubjectID, context, spkr) %>%
+    summarize(pH = prop(hits, m), pFA = prop(fa, cr), pair = column, meanRT = mean(RT), meanACC= mean(ACC))
+  dprime.all <- rbind(dprime.all, this.sum)
 }
+
+summary(dprime.all)
 #the rbind made some of my factors into characters, so change them back to factors
 dprime.all$pair <- as.factor(dprime.all$pair)
-dprime.all$context <- as.factor(dprime.all$context)
-dprime.all$spkr <- as.factor(dprime.all$spkr)
-dprime.all$pu <- as.factor(dprime.all$pu)
-dprime.all$vvl <- as.factor(dprime.all$vvl)
-dprime.all$list <- as.factor(dprime.all$list)
-#drop the NA
-dprime.all <- dprime.all[!is.na(dprime.all$context), ]
+dprime.all$pair <- as.factor(dprime.all$pair)
+
+## add the pu and vvl factors back (I'll want them for analysis and graphing)
+dprime.all$pu <- as.factor(ifelse(dprime.all$pair=="AH", "p", ifelse(dprime.all$pair=="Rx", "u", "c")))
 summary(dprime.all)
+
+dprime.all$vvl <- as.factor(ifelse(dprime.all$pair=="AR", "v", ifelse(dprime.all$pair=="Hx", "vl", "c")))
+summary(dprime.all)
+
 
 
 
@@ -117,7 +120,6 @@ prop <- function(vector1, vector2){
   output
 }
 
-prop(ax$HITS, ax$m)
 
 ```
 
@@ -153,10 +155,14 @@ myfunc <- function(data, groupvar, numvar){
   final.df <- cbind(groupvar.cast, total[, 2])
   #final.df <- merge(groupvar.cast, total, by.y = groupvar.cast[, 1], by.x=total[, 1])
   #names(final.df)[names(final.df)=="Freq"] <- "total"
+  if ((length(names(final.df))) > 3){
   final.df$Perc0 <- round((final.df[, "0"]/final.df[,4])*100, digits=3)
   final.df$Perc1 <- round((final.df[, "1"]/final.df[,4])*100, digits=3)
   final.df$TotalPerc <- final.df$Perc0 + final.df$Perc1
   output <- final.df
+  } else
+  final.df$Perc0 <- round((final.df[, "0"]/final.df[,3])*100, digits=3)
+  output <- final.df 
 }
 
 pH2 <- myfunc(dprime.all, "pair", "pH")
@@ -185,7 +191,7 @@ head(pH2)
 pair.pH <-myfunc(dprime.all, "pair", "pH")
 subject.pH <- myfunc(dprime.all, "SubjectID", "pH")
 subject.pFA <- myfunc(dprime.all, "SubjectID", "pFA")
-
+pair.pFA <- myfunc(dprime.all, "pair", "pFA")
 
 
 ```
@@ -193,155 +199,83 @@ subject.pFA <- myfunc(dprime.all, "SubjectID", "pFA")
 
 5) Dealt with special cases, then d-prime.
 Replacements:
-- hits: 4 trials, so 4/4 is the most possible hits and 0/4 is the least possible hits. The next highers number of hits is 3/4 = .75, and the next lowest number of hits is 1/4 = .25.  Replace 1 with the value halfway between 1 and .75, which is .875. Replace 0 with the value halfway between 0 and .25, which is 0.124
+- hits: 4 trials, so 4/4 is the most possible hits and 0/4 is the least possible hits. The next highers number of hits is 3/4 = .75, and the next lowest number of hits is 1/4 = .25.  Replace 1 with the value halfway between 1 and .75, which is .875. Replace 0 with the value halfway between 0 and .25, which is 0.125
 - false alarms: 32 trials.  The next highest number of false alarms is 31/33 = 0.96875, and the next lowest number of false alarms is 1/32 = 0.03125. Replace 1 with the value halfway between 1 and .96875, which is 0.984375.  Replace 0 with the value halfway between 0 and 0.03125, which is 0.015625.   
 
-- I know these numbers from the design.  But can also get from the data using max()
+- I know these numbers from the design. I made the number of trials into objects and put the calculations into the function.
 
 
 
 ```{r}
-## replacements
-length(dprime.all[dprime.all$correct_response==1 & dprime.all$pair=="Ah", ])
 
-counts <- ax %>% 
-  group_by(SubjectID, context, phoneme_pair) %>%
-  summarize(max = length(RT))
+#function to replace special cases and calculate dprime:
+# the max number of different trials a person heard of a certain pair in a certain context
+maxh = 4
 
-write.csv(counts, "counts.csv")
+# the max number of same trials a person heard of a certain pair in a certain context
+maxfa = 32
 
-counts[1:40, ]
-## for loop pseudo code
-output <- as.data.frame (x=NA)
-for (eachpair in levels(dprime.all$pair)){
-  group_by(dprime.all, SubjectID, context) %>%
-  if (pH ==1){
-    pH <- 0.875
-  }
-  output <-mutate(dprime = qnorm(pH)- qnorm(pFA))
+dprime <- function(data, pH, pFA){
+  data[, pH] <- ifelse(data[, pH]==1, (1-(1-((maxh-1)/maxh))/2), ifelse(data[, pH]==0, ((1/maxh)/2), data[, pH]))
+  data[, pFA] <- ifelse(data[, pFA]==1, (1-(1-((maxfa-1)/maxfa))/2), ifelse(data[, pFA]==0, ((1/maxfa)/2), data[, pFA]))
+  output <- qnorm(data[,pH]) - qnorm(data[,pFA])
+  output
 }
-output
-# if can't calc from data, create a "max hits" and "max false alarms" variables
 
-dprime.all2 <- dprime.all %>%
-  group_by(SubjectID, pair, context) %>%
-  summarize(dprime = dprimeNum(mean(pH), mean(pFA)))
-dprime.all2  
 
-eachpair <- "Ah"
+#checks to make sure the function is working
 
 pH1 <- c(.89, .69, .99, 1)
 pH <- c(.89, .69, .99, .875)
 pFA <- c(.33, .45, .22, .34)
-qnorm(mean(pH)) - qnorm(mean(pFA))
+data <- cbind(pH, pFA)
+data
+qnorm(pH) - qnorm(pFA) #should produce the same output as x below
 
-#function with numbers directly.  Works for numbers but not for vectors?
-dprimeNum <- function (pH, pFA) {
-  #for(num in length(pH)){
-  if (pH==1 ){
-  0.875
-} else pH
-if (pFA==1){
-  0.984375
- } else pFA
-if (pH==0){
-  0.124
- } else pH
-if (pFA==0){
-  0.015625
-  } else pFA
-#}
- output <- qnorm(mean(pH)) - qnorm(mean(pFA))
-output
-}
+x <- dprime(data, "pH", "pFA")
+x # it is the same!
 
-x <- dprimeNum(pH, pFA)
-x
+data1 <- cbind(pH1, pFA)
+qnorm(pH1) - qnorm(pFA) #oh no, "Inf" is the 4th value because of the 1 in ph1
+rm(x)
+x <- dprime(data1, "pH1", "pFA")
+x # the replacement part of the function is working! x has the same values as before
 
-# another function using gsub
-
-dprime.gs <- function(pH, pFA){
-    <- gsub(1, 0.875, pH)
-
-output <- qnorm(pH) - qnorm(pFA)
-}
+xtabs(~pH, data=dprime.all)
+dprime.all$dprime <- dprime(dprime.all, "pH", "pFA")
+summary(dprime.all)
+xtabs(~pH, data=data3) # this vector still has 0's and 1's because I didn't create a new vector inside the function, but dprime doesn't have any "Inf" or "Nan", so it worked
 
 
-dprime2 <- function(pH, pFA){
-  dprime.table.Ah$pH <- ifelse((dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss)) ==1, 0.875, ifelse((dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss))==0, 0.125, dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss))) 
-dprime.table.Ah$pFA <- ifelse((dprime.table.Ah$FAlarms/(dprime.table.Ah$FAlarms + dprime.table.Ah$cr)) ==1, 0.986, ifelse((dprime.table.Ah$FAlarms/(dprime.table.Ah$FAlarms + dprime.table.Ah$cr))==0, 0.0135, dprime.table.Ah$FAlarms/(dprime.table.Ah$FAlarms + dprime.table.Ah$cr)))
-  
-}
-  
-std.err <- function(x, ignore.na = TRUE) { 
-  if(!ignore.na) {
-    output <- sd(x)/sqrt(length(x)) 
-  } else {
-    numer <- sd(x, na.rm = TRUE)
-    denom <- sqrt(length(which(!is.na(x))))
-    output <- numer/denom
-  }
-  output
-}
 
-#replacing 0s and 1s 
-attach(dprime.table.Ah)
-dprime.table.Ah$pH <- ifelse((dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss)) ==1, 0.875, ifelse((dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss))==0, 0.125, dprime.table.Ah$Hits/(dprime.table.Ah$Hits + dprime.table.Ah$miss))) 
-dprime.table.Ah$pFA <- ifelse((dprime.table.Ah$FAlarms/(dprime.table.Ah$FAlarms + dprime.table.Ah$cr)) ==1, 0.986, ifelse((dprime.table.Ah$FAlarms/(dprime.table.Ah$FAlarms + dprime.table.Ah$cr))==0, 0.0135, dprime.table.Ah$FAlarms/(dprime.table.Ah$FAlarms + dprime.table.Ah$cr))) 
-detach(dprime.table.Ah)
-#dprime
-dprime.table.Ah$dprime <- qnorm(dprime.table.Ah$pH)-qnorm(dprime.table.Ah$pFA)
-
-dprime.table.Ah$pair <- "Ah"
-dprime.table.Ah$pair <- as.factor(dprime.table.Ah$pair)
-summary(dprime.table.Ah)
 
 ```
 
-5b) Because I subset, I then put everything back together with rbind(), and then recreated the 'pu' and 'vvl' factors.
 
+
+5) Use boxplots to view distribution of d-prime across contexts and by speaker
 ```{r}
-#dprime.all1<- rbind (dprime.table.Ah, dprime.table.AH) 
-# repeat 25 times
 
-##### create columns for p/u and v/vl #####
-#attach(dprime.all)
-#dprime.all$pu[pair =="AH"] <- "pharyngeal"
-#dprime.all$pu[pair =="Rx"] <- "uvular"
-#dprime.all$pu[pair !="AH" & pair !="Rx"] <- "control"
-#detach(dprime.all)
-#dprime.all$pu <- as.factor(dprime.all$pu)
-#summary(dprime.all)
-
-#attach(dprime.all)
-#dprime.all$vvl[pair =="AR"] <- "voiced"
-#dprime.all$vvl[pair =="Hx"] <- "voiceless"
-#dprime.all$vvl[pair !="AR" & pair !="Hx"] <- "ccontrol"
-#detach(dprime.all)
-#dprime.all$vvl <- as.factor(dprime.all$vvl)
-#summary(dprime.all)
-
-```
-
-6) Use boxplots to view distribution of d-prime across contexts and by speaker
-```{r}
-ax.dprime <- read.csv("ax_dprime_cloze_AL.csv")
-summary(ax.dprime)
-#get rid of NAs
-ax.dprime <- ax.dprime[!is.na(ax.dprime$dprime),]
-#reorder context
-ax.dprime$context <- factor(ax.dprime$context, levels = c("Initial", "Medial", "Final"))
+#get rid of NAs for boxplots
+dprime.all.noNA <- dprime.all[!is.na(dprime.all$dprime),]
+#reorder context to initial, medial, final
+dprime.all.noNA$context <- factor(dprime.all.noNA$context, levels = c("I", "M", "F"))
 
 
-ggplot(ax.dprime, aes(x=context, y=dprime, fill = speaker)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Context") + ylab("D-Prime") + theme_bw()
+# dprime by speaker and context
+ggplot(dprime.all.noNA, aes(x=context, y=dprime, fill = spkr)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Context") + ylab("D-Prime") + theme_bw()
 
-ggplot(ax.dprime, aes(x=speaker, y=dprime, fill = pu)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Context") + ylab("D-Prime") + theme_bw()
+# dprime by speaker and manner type (pharyngeal, uvular, control) 
+ggplot(dprime.all.noNA, aes(x=spkr, y=dprime, fill = pu)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Speaker") + ylab("D-Prime") + theme_bw()
 
-ggplot(ax.dprime, aes(x=speaker, y=dprime, fill = pu)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Context") + ylab("D-Prime") + theme_bw() + facet_grid (.~context)
+# dprime by speaker, context, and manner type (pharyngeal, uvular, control)
+ggplot(dprime.all.noNA, aes(x=spkr, y=dprime, fill = pu)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Speaker") + ylab("D-Prime") + theme_bw() + facet_grid (.~context)
 
-ggplot(ax.dprime, aes(x=speaker, y=dprime, fill = vvl)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Context") + ylab("D-Prime") + theme_bw()
+# dprime by speaker and voicing type (voiced, voiceless, control)
+ggplot(dprime.all.noNA, aes(x=spkr, y=dprime, fill = vvl)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Speaker") + ylab("D-Prime") + theme_bw()
 
-ggplot(ax.dprime, aes(x=speaker, y=dprime, fill = vvl)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Context") + ylab("D-Prime") + theme_bw() + facet_grid (.~context)
+#dprime by speaker, context, and voicing type (voiced, voiceless, control)
+ggplot(dprime.all.noNA, aes(x=spkr, y=dprime, fill = vvl)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Speaker") + ylab("D-Prime") + theme_bw() + facet_grid (.~context)
 
 ```
 
