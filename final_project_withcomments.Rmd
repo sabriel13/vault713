@@ -1,0 +1,244 @@
+---
+title: "final project with comments"
+author: "Alia Lancaster"
+output: html_document
+---
+Read in data and packages
+```{r}
+ax <- read.csv("ax_AL.csv")
+
+library(ggplot2)
+library(dplyr)
+library(reshape2)
+```
+
+Goal: Calculate d-prime per subject, context (initial, medial, final), and pair (28 pairs of phonemes). Record the number of times the proportion of hits or misses is 0 or 1, then replace these special cases with values that represent a similar pattern of response but do not cause "Inf" or "Nan". Create boxplots to examine the distribution of d-prime.
+
+
+Step 1) Create a new column for each phoneme pair that takes into account the same and different pairs.  For instance, the factor "phoneme_pair" includes "Ah", "AA", and "hh".  I want a column called "Ah" that records if a trial is any of those three pairs.  I need a separate column for each pair because the same pairs overlap.  For instance, the same pairs for "Ah" and "Ax" both include "AA".  These new columns will be used in subsetting later on. 
+
+```{r}
+# make all of the strings in 'phoneme_pair' equal to 2 characters.  Take out or replace "-"
+length(ax$phoneme_pair) #21264
+summary(ax$phoneme_pair)
+ax$phoneme_pair <- factor(gsub("A-", "A", ax$phoneme_pair))
+ax$phoneme_pair <- factor(gsub("h-", "H", ax$phoneme_pair))
+summary(ax$phoneme_pair) 
+
+#split by nothing and rbind to ax
+sst <- do.call(rbind, strsplit(as.character(ax$phoneme_pair), ""))
+length(sst[,2]) #21264
+head(sst)
+tail(sst)
+phoneme1 <- sst[,1]
+phoneme2 <- sst[,2]
+ax <- cbind(ax, phoneme1, phoneme2)
+names(ax)
+
+# Create a new column for each pair, collapsing across same and different trials
+paircol <- vector(length=length(ax$phoneme_pair))
+for(pair in levels(droplevels(ax[ax$correct_response==0, "phoneme_pair"]))){
+    pair1 <- strsplit(as.character(pair), "")[[1]][1]
+    pair2 <- strsplit(as.character(pair), "")[[1]][2]
+    paircol <- factor(ifelse(ax$phoneme_pair==pair, pair, ifelse(ax$correct_response==1 &  ax$phoneme1==pair1, pair, ifelse(ax$correct_response==1 & ax$phoneme1 ==pair2, pair, 0))))
+    ax<- cbind(ax, paircol)
+    names(ax)[names(ax)=="paircol"] <- pair
+  }
+
+# check to see if it worked
+names(ax)
+length(ax$Ah)
+summary(ax$Ah)
+summary(ax$phoneme_pair) # from this, I see that there are 384 rows with Ah, 1341 for AA, and 1341 for hh.  This means that ax$Ah should have 3069 rows (384+1341+1341).
+
+```
+
+Step 2) Add 4 factors for hits, misses, false alarms, and correct responses.  I used a function for this from a homework but improved it by making it more general by adding column names to function arguments.
+
+
+```{r}
+make.newcol <- function(data, x, x2){
+  hits <- ifelse(data[,x]=="0" & data[,x2]==1,1,0)
+  fa <- ifelse(data[,x]=="0" & data[,x2]==0,1,0)
+  m <- ifelse(data[,x]=="1" & data[,x2]==0,1,0)
+  cr <- ifelse(data[,x]=="1" & data[,x2]==1,1,0)
+  data <- cbind(data, hits, fa, m, cr) 
+}
+ax <- make.newcol(ax, "correct_response", "ACC")
+summary(ax)
+```
+
+
+Step 3) Calculate number of proportion of hits and false alarms for each pair, subject, context. I use a function I created in a homework within dyplr to do so. The resulting data frame has 2688 rows.  There are 28 pairs, 32 subjects, and three contexts, so there should be 896 rows per context
+
+```{r}
+# proportion function
+
+prop <- function(vector1, vector2){
+  numer <- sum(vector1)
+  denom <- sum(vector1) + sum(vector2)
+  output <- numer/denom
+  output
+}
+# for loop
+dprime.all <- data.frame()
+this.subset <- data.frame()
+for(column in colnames(ax[, c(20:47)])){
+  this.subset <- ax[ax[,column] == column, c("Item", "SubjectID", "context", "correct_response","RT", "ACC", "spkr", "pu", "vvl", "list", "hits", "fa", "m", "cr") ]
+  this.subset <- droplevels(this.subset)
+  this.sum <- this.subset %>%
+    group_by(SubjectID, context, spkr) %>%
+    summarize(pH = prop(hits, m), pFA = prop(fa, cr), pair = column, meanRT = mean(RT), meanACC= mean(ACC))
+  dprime.all <- rbind(dprime.all, this.sum)
+}
+
+summary(dprime.all)
+length(dprime.all$context)
+#the rbind made some of my factors into characters, so change them back to factors
+dprime.all$pair <- as.factor(dprime.all$pair)
+dprime.all$pair <- as.factor(dprime.all$pair)
+
+## add the pu and vvl factors back (I'll want them for analysis and graphing)
+dprime.all$pu <- as.factor(ifelse(dprime.all$pair=="AH", "p", ifelse(dprime.all$pair=="Rx", "u", "c")))
+summary(dprime.all)
+
+dprime.all$vvl <- as.factor(ifelse(dprime.all$pair=="AR", "v", ifelse(dprime.all$pair=="Hx", "vl", "c")))
+summary(dprime.all)
+```
+
+
+Step 4) Make tables of frequency of special cases. The if/else loop in the function exists because pFA does not have any instances of 1, which makes the number of columns different in "final.df". 
+
+```{r}
+
+freq.tables <- function(data, groupvar, numvar){
+  groupvar.sum<- xtabs(~data[, groupvar] + data[,numvar], data=data)
+  groupvar.sum <- as.data.frame(groupvar.sum)
+  groupvar.sum <- groupvar.sum[groupvar.sum[,2]==0 | groupvar.sum[, 2]==1, ]
+  groupvar.cast <- dcast(groupvar.sum, groupvar.sum[,1] ~ groupvar.sum[,2], value.var="Freq")
+  total <- xtabs(~data[, groupvar], data=data)
+  total <- as.data.frame(total)
+  final.df <- cbind(groupvar.cast, total[, 2])
+  if ((length(names(final.df))) > 3){
+  final.df$Perc0 <- round((final.df[, "0"]/final.df[,4])*100, digits=3)
+  final.df$Perc1 <- round((final.df[, "1"]/final.df[,4])*100, digits=3)
+  final.df$TotalPerc <- final.df$Perc0 + final.df$Perc1
+  output <- final.df
+  } else
+  final.df$Perc0 <- round((final.df[, "0"]/final.df[,3])*100, digits=3)
+  output <- final.df 
+}
+
+pH2 <- freq.tables(dprime.all, "pair", "pH")
+
+#check to make sure that the function gets the same output as when I did it once:
+pH<- xtabs(~pair + pH, data=dprime.all)
+pH <- as.data.frame(pH)
+pH <- pH[pH$pH==0 | pH$pH==1, ]
+head(pH)
+pH <- dcast(pH[1:56, ], pair ~ pH, value.var="Freq")
+names(pH)[names(pH)=="0"] <- "pH0"
+names(pH)[names(pH)=="1"] <- "pH1"
+total <- xtabs(~pair, data=dprime.all)
+total <- as.data.frame(total)
+pH.total <- merge(pH, total)
+names(pH.total)[names(pH.total)=="Freq"] <- "total"
+pH.total$pH0Perc <- round((pH.total$pH0/pH.total$total)*100, digits=3)
+pH.total$pH1Perc <- round((pH.total$pH1/pH.total$total)*100, digits=3)
+pH.total$pHTotalPerc <- pH.total$pH0Perc + pH.total$pH1Perc
+
+#these should have the same numbers
+head(pH.total)
+head(pH2)
+
+#now run the function with pair/pFA, subjectID/pH, and subjectID/pFA:
+pair.pH <-freq.tables(dprime.all, "pair", "pH")
+subject.pH <- freq.tables(dprime.all, "SubjectID", "pH")
+subject.pFA <- freq.tables(dprime.all, "SubjectID", "pFA")
+pair.pFA <- freq.tables(dprime.all, "pair", "pFA")
+
+pair.pH
+subject.pH
+subject.pFA
+pair.pFA
+```
+
+
+Step 5) Deal with special cases, then add d-prime. 
+Replacements:
+- hits: 4 trials, so 4/4 is the most possible hits and 0/4 is the least possible hits. The next higherst number of hits is 3/4 = .75, and the next lowest number of hits is 1/4 = .25.  Replace 1 with the value halfway between 1 and .75, which is .875. Replace 0 with the value halfway between 0 and .25, which is 0.125
+- false alarms: 32 trials.  The next highest number of false alarms is 31/33 = 0.96875, and the next lowest number of false alarms is 1/32 = 0.03125. Replace 1 with the value halfway between 1 and .96875, which is 0.984375.  Replace 0 with the value halfway between 0 and 0.03125, which is 0.015625.   
+
+- I know these numbers from the design. I made the number of trials into objects and put the calculations into the function.
+
+
+
+```{r}
+
+#function to replace special cases and calculate dprime:
+# the max number of different trials a person heard of a certain pair in a certain context
+maxh = 4
+
+# the max number of same trials a person heard of a certain pair in a certain context
+maxfa = 32
+
+dprime <- function(data, pH, pFA){
+  data[, pH] <- ifelse(data[, pH]==1, (1-(1-((maxh-1)/maxh))/2), ifelse(data[, pH]==0, ((1/maxh)/2), data[, pH]))
+  data[, pFA] <- ifelse(data[, pFA]==1, (1-(1-((maxfa-1)/maxfa))/2), ifelse(data[, pFA]==0, ((1/maxfa)/2), data[, pFA]))
+  output <- qnorm(data[,pH]) - qnorm(data[,pFA])
+  output
+}
+
+#checks to make sure the function is working
+
+pH1 <- c(.89, .69, .99, 1)
+pH <- c(.89, .69, .99, .875)
+pFA <- c(.33, .45, .22, .34)
+data <- cbind(pH, pFA)
+data
+qnorm(pH) - qnorm(pFA) #should produce the same output as x below
+
+x <- dprime(data, "pH", "pFA")
+x # it is the same!
+
+data1 <- cbind(pH1, pFA)
+qnorm(pH1) - qnorm(pFA) #oh no, "Inf" is the 4th value because of the 1 in ph1
+rm(x)
+x <- dprime(data1, "pH1", "pFA")
+x # the replacement part of the function is working! x has the same values as before
+
+xtabs(~pH, data=dprime.all)
+dprime.all$dprime <- dprime(dprime.all, "pH", "pFA")
+summary(dprime.all)
+xtabs(~pH, data=dprime.all) # this vector still has 0's and 1's because I didn't create a new vector inside the function, but dprime doesn't have any "Inf" or "Nan", so it worked.
+
+```
+
+
+
+Step 6) Use boxplots to view distribution of d-prime across contexts and by speaker
+```{r}
+
+#get rid of NAs for boxplots
+dprime.all.noNA <- dprime.all[!is.na(dprime.all$dprime),]
+#reorder context to initial, medial, final
+dprime.all.noNA$context <- factor(dprime.all.noNA$context, levels = c("I", "M", "F"))
+
+
+# dprime by speaker and context
+ggplot(dprime.all.noNA, aes(x=context, y=dprime, fill = spkr)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Context") + ylab("D-Prime") + theme_bw()
+
+# dprime by speaker and manner type (pharyngeal, uvular, control) 
+ggplot(dprime.all.noNA, aes(x=spkr, y=dprime, fill = pu)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Speaker") + ylab("D-Prime") + theme_bw()
+
+# dprime by speaker, context, and manner type (pharyngeal, uvular, control)
+ggplot(dprime.all.noNA, aes(x=spkr, y=dprime, fill = pu)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Speaker") + ylab("D-Prime") + theme_bw() + facet_grid (.~context)
+
+# dprime by speaker and voicing type (voiced, voiceless, control)
+ggplot(dprime.all.noNA, aes(x=spkr, y=dprime, fill = vvl)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Speaker") + ylab("D-Prime") + theme_bw()
+
+#dprime by speaker, context, and voicing type (voiced, voiceless, control)
+ggplot(dprime.all.noNA, aes(x=spkr, y=dprime, fill = vvl)) + geom_boxplot() + scale_fill_brewer(palette="Set1") + xlab("Speaker") + ylab("D-Prime") + theme_bw() + facet_grid (.~context)
+
+```
+
